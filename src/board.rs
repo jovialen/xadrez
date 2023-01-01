@@ -273,3 +273,27 @@ impl fmt::Display for Square {
         write!(f, "{:?}", self)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::fen::FEN_EMPTY_POSITION;
+
+    fn test_fen(fen: &str) {
+        let chessboard = Chessboard::from_fen(fen);
+        assert!(chessboard.is_ok());
+        assert_eq!(chessboard.unwrap().to_string(), fen);
+    }
+
+    #[test]
+    fn fen_parsing() {
+        test_fen(FEN_STARTING_POSITION);
+        test_fen(FEN_EMPTY_POSITION);
+        test_fen("8/5k2/3p4/1p1Pp2p/pP2Pp1P/P4P1K/8/8 b - - 99 50");
+        test_fen("8/4npk1/5p1p/1Q5P/1p4P1/4r3/7q/3K1R2 b - - 1 49");
+        test_fen("5r1k/6pp/4Qpb1/p7/8/6PP/P4PK1/3q4 b - - 4 37");
+        test_fen("8/8/2P5/4B3/1Q6/4K3/6P1/3k4 w - - 5 67");
+        test_fen("r2q1rk1/pp2ppbp/2p2np1/6B1/3PP1b1/Q1P2N2/P4PPP/3RKB1R b K - 0 13");
+        test_fen("8/pppp1ppp/8/4p3/8/7P/PPPPPPP1/8 w - e6 0 13");
+    }
+}
