@@ -1,3 +1,6 @@
+use xadrez::board::Chessboard;
+
 fn main() {
-    println!("Hello, world!");
+    let chessboard = Chessboard::default();
+    println!("{:?}", chessboard);
 }
