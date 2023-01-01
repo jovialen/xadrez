@@ -7,8 +7,9 @@ use crate::{
     fen::{FenString, FEN_STARTING_POSITION},
     piece::{Piece, PieceKind, Side, SIDE_COUNT},
 };
+use itertools::Itertools;
 use num_derive::FromPrimitive;
-use std::str::FromStr;
+use std::{fmt, str::FromStr};
 
 /// Count of files on the chessboard.
 ///
@@ -88,6 +89,12 @@ impl Default for Chessboard {
     }
 }
 
+impl fmt::Display for Chessboard {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.position.to_string().as_str())
+    }
+}
+
 impl FromStr for Position {
     type Err = ParseFenError;
 
@@ -145,6 +152,66 @@ impl FromStr for Position {
     }
 }
 
+impl fmt::Display for Position {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for (i, slice) in self.squares.chunks_exact(BOARD_FILES).rev().enumerate() {
+            if i != 0 {
+                write!(f, "/")?;
+            }
+
+            for (key, group) in &slice.iter().group_by(|piece| piece.is_some()) {
+                if key {
+                    for piece in group {
+                        // Safety: If the key is true, the options are all Some
+                        write!(f, "{}", piece.unwrap())?;
+                    }
+                } else {
+                    write!(f, "{}", group.count())?;
+                }
+            }
+        }
+
+        write!(f, " {}", self.side_to_move)?;
+
+        write!(
+            f,
+            " {}",
+            if self.castling.iter().flatten().any(|castling| *castling) {
+                self.castling
+                    .iter()
+                    .flatten()
+                    .enumerate()
+                    .filter(|(_, castling)| **castling)
+                    .fold(String::new(), |acc, (i, _)| {
+                        acc + match i {
+                            0 => "K",
+                            1 => "Q",
+                            2 => "k",
+                            3 => "q",
+                            _ => unreachable!(),
+                        }
+                    })
+            } else {
+                "-".to_string()
+            }
+        )?;
+
+        write!(
+            f,
+            " {}",
+            match self.en_passant {
+                Some(square) => square.to_string().to_lowercase(),
+                None => "-".to_string(),
+            }
+        )?;
+
+        write!(f, " {}", self.halftime)?;
+        write!(f, " {}", self.fulltime)?;
+
+        Ok(())
+    }
+}
+
 impl Square {
     /// Get the square on the given rank and file.
     ///
@@ -198,5 +265,11 @@ impl FromStr for Square {
             - 1;
 
         Square::from_rank_file(rank as u16, file as u16)
+    }
+}
+
+impl fmt::Display for Square {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
     }
 }

@@ -3,6 +3,7 @@
 //! Provides the structures used relating to the pieces on the chessboard.
 
 use crate::error::ParseFenError;
+use std::fmt;
 
 /// Constants for all the types of chess pieces.
 pub mod piece_constants {
@@ -149,6 +150,20 @@ impl TryFrom<char> for Piece {
     }
 }
 
+impl fmt::Display for Piece {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let c = self.kind.to_string();
+
+        let c = if self.side == Side::White {
+            c.to_uppercase()
+        } else {
+            c.to_lowercase()
+        };
+
+        write!(f, "{}", c)
+    }
+}
+
 impl From<char> for Side {
     fn from(value: char) -> Self {
         match value {
@@ -156,6 +171,19 @@ impl From<char> for Side {
             c if c.is_uppercase() => Side::White,
             _ => Side::Black,
         }
+    }
+}
+
+impl fmt::Display for Side {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Side::White => 'w',
+                Side::Black => 'b',
+            }
+        )
     }
 }
 
@@ -172,5 +200,22 @@ impl TryFrom<char> for PieceKind {
             'P' | 'p' => Ok(PieceKind::Pawn),
             _ => Err(ParseFenError::InvalidPiece(value)),
         }
+    }
+}
+
+impl fmt::Display for PieceKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                PieceKind::King => "k",
+                PieceKind::Queen => "q",
+                PieceKind::Bishop => "b",
+                PieceKind::Knight => "n",
+                PieceKind::Rook => "r",
+                PieceKind::Pawn => "p",
+            }
+        )
     }
 }
