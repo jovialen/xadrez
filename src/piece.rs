@@ -2,6 +2,8 @@
 //!
 //! Provides the structures used relating to the pieces on the chessboard.
 
+use crate::error::ParseFenError;
+
 /// Constants for all the types of chess pieces.
 pub mod piece_constants {
     use super::{Piece, PieceKind::*, Side::*};
@@ -133,5 +135,42 @@ impl Piece {
     /// * `kind` - The kind of the piece.
     pub fn new(side: Side, kind: PieceKind) -> Self {
         Piece { kind, side }
+    }
+}
+
+impl TryFrom<char> for Piece {
+    type Error = ParseFenError;
+
+    fn try_from(value: char) -> Result<Self, Self::Error> {
+        Ok(Self {
+            kind: PieceKind::try_from(value)?,
+            side: Side::from(value),
+        })
+    }
+}
+
+impl From<char> for Side {
+    fn from(value: char) -> Self {
+        match value {
+            'w' => Side::White,
+            c if c.is_uppercase() => Side::White,
+            _ => Side::Black,
+        }
+    }
+}
+
+impl TryFrom<char> for PieceKind {
+    type Error = ParseFenError;
+
+    fn try_from(value: char) -> Result<Self, Self::Error> {
+        match value {
+            'K' | 'k' => Ok(PieceKind::King),
+            'Q' | 'q' => Ok(PieceKind::Queen),
+            'B' | 'b' => Ok(PieceKind::Bishop),
+            'N' | 'n' => Ok(PieceKind::Knight),
+            'R' | 'r' => Ok(PieceKind::Rook),
+            'P' | 'p' => Ok(PieceKind::Pawn),
+            _ => Err(ParseFenError::InvalidPiece(value)),
+        }
     }
 }

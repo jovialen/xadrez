@@ -2,7 +2,13 @@
 //!
 //! Provides the structures relating to the chessboard as a whole.
 
-use crate::piece::{Piece, Side, SIDE_COUNT};
+use crate::{
+    error::ParseFenError,
+    fen::{FenString, FEN_STARTING_POSITION},
+    piece::{Piece, PieceKind, Side, SIDE_COUNT},
+};
+use num_derive::FromPrimitive;
+use std::str::FromStr;
 
 /// Count of files on the chessboard.
 ///
@@ -15,7 +21,7 @@ pub const BOARD_FILES: usize = 8;
 /// numbers from 1 to 8.
 pub const BOARD_RANKS: usize = 8;
 /// Count of squares on the chessboard in total.
-pub const BOARD_SQUARES: usize = BOARD_FILES * BOARD_RANKS;
+pub const BOARD_SIZE: usize = BOARD_FILES * BOARD_RANKS;
 
 /// Structure representing a chessboard.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -25,7 +31,7 @@ pub struct Chessboard {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Position {
-    squares: [Option<Piece>; BOARD_SQUARES],
+    squares: [Option<Piece>; BOARD_SIZE],
     side_to_move: Side,
     castling: [[bool; 2]; SIDE_COUNT],
     en_passant: Option<Square>,
@@ -35,7 +41,7 @@ struct Position {
 
 /// The squares on the chessboard.
 #[rustfmt::skip]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, FromPrimitive, PartialEq, Eq)]
 #[allow(missing_docs)]
 pub enum Square {
     A1, B1, C1, D1, E1, F1, G1, H1,
@@ -48,23 +54,149 @@ pub enum Square {
     A8, B8, C8, D8, E8, F8, G8, H8,
 }
 
+impl Chessboard {
+    /// Create a new chessboard from a FEN string.
+    ///
+    /// # Arguments
+    ///
+    /// * `fen` - The FEN string with the board position.
+    ///
+    /// # Panics
+    ///
+    /// If the FEN string is invalid. If the FEN string may be invalid, use
+    /// [`Chessboard::from_fen`] instead.
+    pub fn new(fen: &str) -> Self {
+        Self::from_fen(fen).unwrap()
+    }
+
+    /// Create a chessboard from a FEN string.
+    ///
+    /// # Arguments
+    ///
+    /// * `fen` - The FEN string to parse.
+    pub fn from_fen(fen: &str) -> Result<Self, ParseFenError> {
+        Ok(Self {
+            position: Position::from_str(fen)?,
+        })
+    }
+}
+
 impl Default for Chessboard {
     fn default() -> Self {
-        Self {
-            position: Position::new(),
+        // Safety: The FEN starting position constant should always be valid.
+        Self::from_fen(FEN_STARTING_POSITION).unwrap()
+    }
+}
+
+impl FromStr for Position {
+    type Err = ParseFenError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let fen = FenString::try_from(s)?;
+
+        let mut squares = [None; BOARD_SIZE];
+
+        let mut i = 0;
+        for rank in fen.squares.split('/').rev() {
+            for piece in rank.chars() {
+                squares[i] = match piece {
+                    '1'..='8' => {
+                        // Safety: Already validated that the char is a valid digit.
+                        i += piece.to_digit(10).unwrap() as usize - 1;
+                        None
+                    }
+                    _ => Some(Piece::try_from(piece)?),
+                };
+                i += 1;
+            }
+        }
+
+        if i != BOARD_SIZE {
+            return Err(ParseFenError::InvalidBoardSize);
+        }
+
+        let side_to_move = Side::from(fen.side_to_move);
+
+        let mut castling = [[false; 2]; SIDE_COUNT];
+        for p in fen
+            .castling_ability
+            .chars()
+            .filter_map(|c| Piece::try_from(c).ok())
+            .filter(|piece| piece.kind == PieceKind::King || piece.kind == PieceKind::Queen)
+        {
+            castling[p.side as usize][p.kind as usize] = true;
+        }
+
+        let en_passant = match fen.en_passant_target_square {
+            "-" => None,
+            target => Some(Square::from_str(target)?),
+        };
+        let halftime = fen.halftime.parse()?;
+        let fulltime = fen.fulltime.parse()?;
+
+        Ok(Self {
+            squares,
+            side_to_move,
+            castling,
+            en_passant,
+            halftime,
+            fulltime,
+        })
+    }
+}
+
+impl Square {
+    /// Get the square on the given rank and file.
+    ///
+    /// # Arguments
+    ///
+    /// * `rank` - The rank of the square.
+    /// * `file` - The file of the square.
+    pub fn from_rank_file<R, F>(rank: R, file: F) -> Result<Self, ParseFenError>
+    where
+        usize: From<R> + From<F>,
+    {
+        let rank = usize::from(rank);
+        let file = usize::from(file);
+        if rank >= BOARD_RANKS || file >= BOARD_FILES {
+            Err(ParseFenError::InvalidSquare)
+        } else {
+            let i = rank * BOARD_FILES + file;
+            Square::try_from(i)
         }
     }
 }
 
-impl Position {
-    fn new() -> Self {
-        Self {
-            squares: [None; BOARD_SQUARES],
-            side_to_move: Side::White,
-            castling: [[false; 2]; SIDE_COUNT],
-            en_passant: None,
-            halftime: 0,
-            fulltime: 0,
-        }
+impl TryFrom<usize> for Square {
+    type Error = ParseFenError;
+
+    fn try_from(value: usize) -> Result<Self, Self::Error> {
+        num::FromPrimitive::from_usize(usize::from(value)).ok_or(ParseFenError::InvalidSquare)
+    }
+}
+
+impl FromStr for Square {
+    type Err = ParseFenError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut iter = s.chars();
+
+        let file = match iter
+            .next()
+            .ok_or(ParseFenError::InvalidSquare)?
+            .to_ascii_uppercase()
+        {
+            file @ 'A'..='H' => file as u8 - 'A' as u8,
+            _ => Err(ParseFenError::InvalidSquare)?,
+        };
+
+        let rank = iter
+            .next()
+            .ok_or(ParseFenError::InvalidSquare)?
+            .to_digit(10)
+            .ok_or(ParseFenError::InvalidSquare)?
+            - 1;
+
+        Square::from_rank_file(rank as u16, file as u16)
     }
 }
