@@ -21,6 +21,19 @@ pub enum ParseFenError {
     ParseClockError(ParseIntError),
 }
 
+/// An error which can be returned while parsing long algebraic notation.
+#[derive(Debug)]
+pub enum ParseLANError {
+    /// Either the to or from square was missing.
+    MissingField,
+    /// Either the to or from square was invalid.
+    InvalidSquare,
+    /// The promotion of the piece was invalid.
+    InvalidPromotion,
+    /// The input was either too long or too short to be vaild.
+    InvalidSize,
+}
+
 impl From<ParseIntError> for ParseFenError {
     fn from(err: ParseIntError) -> Self {
         ParseFenError::ParseClockError(err)

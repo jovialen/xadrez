@@ -5,4 +5,5 @@
 pub mod board;
 pub mod error;
 pub mod fen;
+pub mod r#move;
 pub mod piece;
