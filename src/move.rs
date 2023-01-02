@@ -40,6 +40,10 @@ impl FromStr for Move {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let s = s.trim();
 
+        if s.is_empty() {
+            return Err(ParseLANError::Empty);
+        }
+
         if s.len() < 4 || s.len() > 5 {
             return Err(ParseLANError::InvalidSize);
         }

@@ -80,6 +80,16 @@ impl Chessboard {
             position: Position::from_str(fen)?,
         })
     }
+
+    /// Set the position of the chessboard with a FEN string.
+    ///
+    /// # Arguments
+    ///
+    /// * `fen` - FEN string of the new position.
+    pub fn set_position(&mut self, fen: &str) -> Result<(), ParseFenError> {
+        self.position = Position::from_str(fen)?;
+        Ok(())
+    }
 }
 
 impl Default for Chessboard {
@@ -99,6 +109,10 @@ impl FromStr for Position {
     type Err = ParseFenError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.is_empty() {
+            return Err(ParseFenError::Empty);
+        }
+
         let fen = FenString::try_from(s)?;
 
         let mut squares = [None; BOARD_SIZE];
