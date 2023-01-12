@@ -162,6 +162,11 @@ impl Chessboard {
                 self.position.en_passant = Some(Square::try_from(ep_index).unwrap())
             }
             MoveKind::Capture => self.position.halftime = 0,
+            MoveKind::Promotion(into) => {
+                if let Some(ref mut piece) = self.position[m.to] {
+                    piece.kind = into;
+                }
+            }
             MoveKind::Any => unreachable!("No move of kind \"Any\" should ever be used."),
             _ => (),
         }

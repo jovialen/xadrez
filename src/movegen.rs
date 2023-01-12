@@ -320,10 +320,11 @@ fn generate_pawn_moves(
         let from = Square::try_from(pawn).unwrap();
         let (moves, attacks) = PAWN_MOVES[friendly][pawn];
 
-        let mut quiets = moves & !bitboards.occupied;
-        let mut captures = attacks & bitboards.sides[hostile];
+        let quiets = moves & !bitboards.occupied;
+        let captures = attacks & bitboards.sides[hostile];
+        let mut all = quiets | captures;
 
-        while let Some(to) = quiets.pop_lsb() {
+        while let Some(to) = all.pop_lsb() {
             // Safety: Always in range 0..64
             let to = Square::try_from(to).unwrap();
 
@@ -332,18 +333,6 @@ fn generate_pawn_moves(
             dest.push(Move::new(from, to, MoveKind::Promotion(PieceKind::Rook)));
             dest.push(Move::new(from, to, MoveKind::Promotion(PieceKind::Knight)));
         }
-
-        while let Some(to) = captures.pop_lsb() {
-            // Safety: Always in range 0..64
-            let to = Square::try_from(to).unwrap();
-
-            dest.push(Move::new(from, to, MoveKind::Promotion(PieceKind::Queen)));
-            dest.push(Move::new(from, to, MoveKind::Promotion(PieceKind::Bishop)));
-            dest.push(Move::new(from, to, MoveKind::Promotion(PieceKind::Rook)));
-            dest.push(Move::new(from, to, MoveKind::Promotion(PieceKind::Knight)));
-        }
-
-        todo!("Allow for multiple move kinds for a single move (both capture and promote)");
     }
 }
 

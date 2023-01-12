@@ -92,7 +92,15 @@ impl PartialEq for Move {
 
 impl PartialEq<MoveKind> for Move {
     fn eq(&self, other: &MoveKind) -> bool {
-        self.kind == *other || self.kind == MoveKind::Any || *other == MoveKind::Any
+        use MoveKind::*;
+
+        match (self.kind, *other) {
+            (Any, Promotion(_)) => false,
+            (Promotion(_), Any) => false,
+            (Any, _) => true,
+            (_, Any) => true,
+            (k0, k1) => k0 == k1,
+        }
     }
 }
 
@@ -180,13 +188,16 @@ mod tests {
         use crate::{board::Square::*, piece::PieceKind::*};
 
         #[test]
-        fn any_equals_all() {
+        fn any_is_all_except_promotion() {
+            assert_eq!(Move::new(A1, A2, Any), Move::new(A1, A2, Any));
             assert_eq!(Move::new(A1, A2, Any), Move::new(A1, A2, Quiet));
             assert_eq!(Move::new(A1, A2, Any), Move::new(A1, A2, Capture));
-            assert_eq!(Move::new(A1, A2, Any), Move::new(A1, A2, Promotion(Queen)));
-            assert_eq!(Move::new(A1, A2, Any), Move::new(A1, A2, Promotion(Bishop)));
-            assert_eq!(Move::new(A1, A2, Any), Move::new(A1, A2, Promotion(Rook)));
-            assert_eq!(Move::new(A1, A2, Any), Move::new(A1, A2, Promotion(Knight)));
+            assert_eq!(Move::new(A1, A2, Any), Move::new(A1, A2, EnPassant));
+
+            assert_ne!(Move::new(A1, A2, Any), Move::new(A1, A2, Promotion(Queen)));
+            assert_ne!(Move::new(A1, A2, Any), Move::new(A1, A2, Promotion(Bishop)));
+            assert_ne!(Move::new(A1, A2, Any), Move::new(A1, A2, Promotion(Rook)));
+            assert_ne!(Move::new(A1, A2, Any), Move::new(A1, A2, Promotion(Knight)));
         }
 
         #[test]

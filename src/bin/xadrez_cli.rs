@@ -100,6 +100,7 @@ fn main() {
             Some("move") | Some("m") => print_if_err!(do_move(&mut chessboard, tokens)),
             Some("moves") => print_moves(&chessboard, tokens),
             Some("perft") => perft(&mut chessboard, tokens),
+            Some("undo") => chessboard.undo(),
             Some(cmd) => eprintln!("Error: Unknown command \"{}\"", cmd),
             None => continue,
         }
