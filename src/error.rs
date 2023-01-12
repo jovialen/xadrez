@@ -48,9 +48,17 @@ pub enum MoveError {
     IllegalMove,
 }
 
-impl Error for ParseFenError {
-    fn description(&self) -> &str {
-        match self {
+impl From<ParseIntError> for ParseFenError {
+    fn from(err: ParseIntError) -> Self {
+        ParseFenError::ParseClockError(err)
+    }
+}
+
+impl Error for ParseFenError {}
+
+impl fmt::Display for ParseFenError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
             Self::MissingField => "one or more fields are missing from the FEN string",
             Self::TrailingField => "there are one or more trailing fields in the FEN string",
             Self::InvalidBoardSize => "FEN position is formatted incorrectly",
@@ -58,50 +66,30 @@ impl Error for ParseFenError {
             Self::InvalidPiece(_) => "unknown piece",
             Self::ParseClockError(_) => "failed to parse clock field",
             Self::Empty => "empty FEN string",
-        }
+        })
     }
 }
 
-impl From<ParseIntError> for ParseFenError {
-    fn from(err: ParseIntError) -> Self {
-        ParseFenError::ParseClockError(err)
-    }
-}
+impl Error for ParseLANError {}
 
-impl fmt::Display for ParseFenError {
+impl fmt::Display for ParseLANError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.description())
-    }
-}
-
-impl Error for ParseLANError {
-    fn description(&self) -> &str {
-        match self {
+        f.write_str(match self {
             Self::MissingField => "missing either from or to square",
             Self::InvalidSquare => "invalid square notation",
             Self::InvalidPromotion => "invalid piece for promotion",
             Self::InvalidSize => "incorrectly formatted LAN string",
             Self::Empty => "empty LAN string",
-        }
+        })
     }
 }
 
-impl fmt::Display for ParseLANError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.description())
-    }
-}
-
-impl Error for MoveError {
-    fn description(&self) -> &str {
-        match self {
-            Self::IllegalMove => "move is not legal",
-        }
-    }
-}
+impl Error for MoveError {}
 
 impl fmt::Display for MoveError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.description())
+        f.write_str(match self {
+            Self::IllegalMove => "move is not legal",
+        })
     }
 }

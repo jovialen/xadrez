@@ -1,6 +1,9 @@
 use std::{fmt, ops};
 
 pub(crate) mod bitboard_constants {
+    // Allow for completeness
+    #![allow(unused)]
+
     use super::Bitboard;
 
     pub(crate) const BITBOARD_ALL: Bitboard = Bitboard(0xFFFFFFFFFFFFFFFF);
@@ -78,13 +81,8 @@ impl Bitboard {
 
     pub fn pop_lsb(&mut self) -> Option<usize> {
         let lsb = self.lsb()?;
-        self.0 &= !(0b1 << lsb);
+        self.off(lsb);
         Some(lsb)
-    }
-
-    #[inline]
-    pub fn reset(&mut self) {
-        self.0 = 0;
     }
 }
 
