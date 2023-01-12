@@ -58,6 +58,14 @@ fn do_move<'a, I: Iterator<Item = &'a str>>(
     Ok(())
 }
 
+fn perft<'a, I: Iterator<Item = &'a str>>(board: &mut Chessboard, mut args: I) {
+    let depth = args
+        .next()
+        .and_then(|s| s.parse::<usize>().ok())
+        .unwrap_or(4);
+    println!("Perft result: {}", board.perft(depth));
+}
+
 fn print_moves<'a, I: Iterator<Item = &'a str>>(board: &Chessboard, mut args: I) {
     let filter = args.next().unwrap_or("");
     for m in board
@@ -91,6 +99,7 @@ fn main() {
             Some("display") | Some("d") => pretty_print_position(&chessboard, tokens),
             Some("move") | Some("m") => print_if_err!(do_move(&mut chessboard, tokens)),
             Some("moves") => print_moves(&chessboard, tokens),
+            Some("perft") => perft(&mut chessboard, tokens),
             Some(cmd) => eprintln!("Error: Unknown command \"{}\"", cmd),
             None => continue,
         }
