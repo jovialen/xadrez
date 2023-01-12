@@ -3,13 +3,16 @@
 //! Provides the structures relating to the chessboard as a whole.
 
 use crate::{
-    error::ParseFenError,
+    bitboards::{bitboard_constants::*, Bitboard},
+    error::{MoveError, ParseFenError},
     fen::{FenString, FEN_STARTING_POSITION},
+    movegen,
     piece::{Piece, PieceKind, Side, SIDE_COUNT},
+    r#move::{Move, MoveKind},
 };
 use itertools::Itertools;
 use num_derive::FromPrimitive;
-use std::{fmt, str::FromStr};
+use std::{fmt, ops, str::FromStr};
 
 /// Count of files on the chessboard.
 ///
@@ -25,19 +28,21 @@ pub const BOARD_RANKS: usize = 8;
 pub const BOARD_SIZE: usize = BOARD_FILES * BOARD_RANKS;
 
 /// Structure representing a chessboard.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Chessboard {
     position: Position,
+    legal_moves: Vec<Move>,
+    history: Vec<(Position, Vec<Move>)>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Position {
-    squares: [Option<Piece>; BOARD_SIZE],
-    side_to_move: Side,
-    castling: [[bool; 2]; SIDE_COUNT],
-    en_passant: Option<Square>,
-    halftime: u32,
-    fulltime: u32,
+pub(crate) struct Position {
+    pub squares: [Option<Piece>; BOARD_SIZE],
+    pub side_to_move: Side,
+    pub castling: [[bool; 2]; SIDE_COUNT],
+    pub en_passant: Option<Square>,
+    pub halftime: u32,
+    pub fulltime: u32,
 }
 
 /// The squares on the chessboard.
@@ -53,6 +58,18 @@ pub enum Square {
     A6, B6, C6, D6, E6, F6, G6, H6,
     A7, B7, C7, D7, E7, F7, G7, H7,
     A8, B8, C8, D8, E8, F8, G8, H8,
+}
+
+#[derive(Clone, Copy, Debug, FromPrimitive, PartialEq, Eq)]
+pub(crate) enum Direction {
+    North,
+    East,
+    South,
+    West,
+    NorthEast,
+    NorthWest,
+    SouthEast,
+    SouthWest,
 }
 
 impl Chessboard {
@@ -76,8 +93,12 @@ impl Chessboard {
     ///
     /// * `fen` - The FEN string to parse.
     pub fn from_fen(fen: &str) -> Result<Self, ParseFenError> {
+        let position = Position::from_str(fen)?;
+
         Ok(Self {
-            position: Position::from_str(fen)?,
+            position,
+            legal_moves: movegen::generate_legal_moves(&position),
+            history: Vec::new(),
         })
     }
 
@@ -88,7 +109,136 @@ impl Chessboard {
     /// * `fen` - FEN string of the new position.
     pub fn set_position(&mut self, fen: &str) -> Result<(), ParseFenError> {
         self.position = Position::from_str(fen)?;
+        self.legal_moves = movegen::generate_legal_moves(&self.position);
         Ok(())
+    }
+
+    /// Get all possible legal moves.
+    pub fn moves(&self) -> &Vec<Move> {
+        &self.legal_moves
+    }
+
+    /// Make a move on the chessboard.
+    ///
+    /// The move must be legal.
+    ///
+    /// # Arguments
+    ///
+    /// * `m` - A legal move to make on the board.
+    pub fn make_move(&mut self, m: Move) -> Result<(), MoveError> {
+        // Check if move is legal
+        let m = if let Some(legal) = self.legal_moves.iter().find(|&legal| legal == &m) {
+            // Filter out Any kind moves with the actual legal equivilant.
+            legal
+        } else {
+            return Err(MoveError::IllegalMove);
+        };
+
+        // Save the current position in the history
+        self.history.push((self.position, self.legal_moves.clone()));
+
+        // Safety: There will always be a from piece if the move is legal, and that was
+        // confirmed above.
+        let to_move = self.position[m.from].unwrap();
+
+        // Clear the en passant
+        self.position.en_passant = None;
+
+        // Do the move
+        self.position[m.to] = self.position[m.from];
+        self.position[m.from] = None;
+
+        self.position.halftime += 1;
+        self.position.fulltime += 1;
+
+        self.position.side_to_move = !self.position.side_to_move;
+
+        // Check for any special conditions with the move
+        match m.kind {
+            MoveKind::EnPassant => {
+                // The index of the square that was jumped over in the pawn push will always be
+                // the sum of the indices of the to and from divided by two.
+                let ep_index = (m.from as usize + m.to as usize) / 2;
+                self.position.en_passant = Some(Square::try_from(ep_index).unwrap())
+            }
+            MoveKind::Capture => self.position.halftime = 0,
+            MoveKind::Any => unreachable!("No move of kind \"Any\" should ever be used."),
+            _ => (),
+        }
+
+        if to_move.kind == PieceKind::Pawn {
+            self.position.halftime = 0;
+        }
+
+        // Update legal moves
+        self.legal_moves = movegen::generate_legal_moves(&self.position);
+
+        Ok(())
+    }
+
+    /// Undo the last move.
+    pub fn undo(&mut self) {
+        if let Some((last_pos, last_moves)) = self.history.pop() {
+            self.position = last_pos;
+            self.legal_moves = last_moves;
+        }
+    }
+
+    /// Perft move enumeration function.
+    ///
+    /// Counts all possible legal moves from the current position to a given
+    /// depth.
+    ///
+    /// # Arguments
+    ///
+    /// * `depth` - How many max moves to make. Must be at least 1.
+    pub fn perft(&mut self, depth: usize) -> usize {
+        if depth == 0 {
+            return 1;
+        }
+
+        let moves = self.moves().clone();
+
+        if depth == 1 {
+            return moves.len();
+        }
+
+        let mut nodes = 0;
+
+        for m in moves {
+            // Safety: All moves should be legal
+            self.make_move(m).unwrap();
+            nodes += self.perft(depth - 1);
+            self.undo();
+        }
+
+        nodes
+    }
+
+    /// Check if a move is legal.
+    ///
+    /// # Arguments
+    ///
+    /// * `m` - The move to validate.
+    pub fn is_legal(&self, m: Move) -> bool {
+        self.legal_moves.contains(&m)
+    }
+
+    /// Get a refrence to the board squares.
+    ///
+    /// This function returns a refrence to the internal one dimentional array
+    /// of squares. The array is laid out such that it can be directly
+    /// indexed with the integer values of the [`Square`] enum.
+    pub fn squares(&self) -> &[Option<Piece>; BOARD_SIZE] {
+        &self.position.squares
+    }
+
+    /// Get all the pieces on the board.
+    ///
+    /// This function returns a vector of all the pieces on the board in a toupe
+    /// with its position on the board.
+    pub fn pieces(&self) -> Vec<(Piece, Square)> {
+        self.position.pieces()
     }
 }
 
@@ -102,6 +252,30 @@ impl Default for Chessboard {
 impl fmt::Display for Chessboard {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.position.to_string().as_str())
+    }
+}
+
+impl Position {
+    pub fn pieces(&self) -> Vec<(Piece, Square)> {
+        self.squares
+            .iter()
+            .enumerate()
+            .filter_map(|(i, &option)| Some((option?, Square::try_from(i).ok()?)))
+            .collect()
+    }
+}
+
+impl ops::Index<Square> for Position {
+    type Output = Option<Piece>;
+
+    fn index(&self, index: Square) -> &Self::Output {
+        &self.squares[index as usize]
+    }
+}
+
+impl ops::IndexMut<Square> for Position {
+    fn index_mut(&mut self, index: Square) -> &mut Self::Output {
+        &mut self.squares[index as usize]
     }
 }
 
@@ -246,6 +420,62 @@ impl Square {
             Square::try_from(i)
         }
     }
+
+    /// Get the rank and file of the square.
+    pub fn to_rank_file(&self) -> (usize, usize) {
+        let rank = *self as usize / BOARD_FILES;
+        let file = *self as usize % BOARD_FILES;
+        (rank, file)
+    }
+
+    /// Get the distance between two squares.
+    pub fn distance(&self, rhs: Self) -> f64 {
+        let (sr, sf) = self.to_rank_file();
+        let (rr, rf) = rhs.to_rank_file();
+        let xdiff = (sf as i32 - rf as i32) as f64;
+        let ydiff = (sr as i32 - rr as i32) as f64;
+        (xdiff.powf(2.0) + ydiff.powf(2.0)).sqrt()
+    }
+
+    #[inline]
+    pub(crate) fn neighbour(&self, direction: Direction) -> Option<Square> {
+        match Square::try_from(*self as isize + direction.offset()) {
+            Ok(dest) if self.distance(dest) <= 2.0 => Some(dest),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn rank(&self) -> Bitboard {
+        let (rank, _) = self.to_rank_file();
+        match rank {
+            0 => BITBOARD_RANK_1,
+            1 => BITBOARD_RANK_2,
+            2 => BITBOARD_RANK_3,
+            3 => BITBOARD_RANK_4,
+            4 => BITBOARD_RANK_5,
+            5 => BITBOARD_RANK_6,
+            6 => BITBOARD_RANK_7,
+            7 => BITBOARD_RANK_8,
+            _ => unreachable!(),
+        }
+    }
+
+    #[inline]
+    pub(crate) fn file(&self) -> Bitboard {
+        let (_, file) = self.to_rank_file();
+        match file {
+            0 => BITBOARD_FILE_A,
+            1 => BITBOARD_FILE_B,
+            2 => BITBOARD_FILE_C,
+            3 => BITBOARD_FILE_D,
+            4 => BITBOARD_FILE_E,
+            5 => BITBOARD_FILE_F,
+            6 => BITBOARD_FILE_G,
+            7 => BITBOARD_FILE_H,
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl TryFrom<usize> for Square {
@@ -253,6 +483,20 @@ impl TryFrom<usize> for Square {
 
     fn try_from(value: usize) -> Result<Self, Self::Error> {
         num::FromPrimitive::from_usize(usize::from(value)).ok_or(ParseFenError::InvalidSquare)
+    }
+}
+
+impl TryFrom<isize> for Square {
+    type Error = ParseFenError;
+
+    fn try_from(value: isize) -> Result<Self, Self::Error> {
+        num::FromPrimitive::from_isize(isize::from(value)).ok_or(ParseFenError::InvalidSquare)
+    }
+}
+
+impl Into<usize> for Square {
+    fn into(self) -> usize {
+        self as usize
     }
 }
 
@@ -288,6 +532,21 @@ impl fmt::Display for Square {
     }
 }
 
+impl Direction {
+    fn offset(&self) -> isize {
+        match *self {
+            Self::North => BOARD_FILES as isize,
+            Self::East => 1,
+            Self::South => -(BOARD_FILES as isize),
+            Self::West => -1,
+            Self::NorthEast => BOARD_FILES as isize + 1,
+            Self::NorthWest => BOARD_FILES as isize - 1,
+            Self::SouthEast => -(BOARD_FILES as isize) + 1,
+            Self::SouthWest => -(BOARD_FILES as isize) - 1,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -309,5 +568,18 @@ mod tests {
         test_fen("8/8/2P5/4B3/1Q6/4K3/6P1/3k4 w - - 5 67");
         test_fen("r2q1rk1/pp2ppbp/2p2np1/6B1/3PP1b1/Q1P2N2/P4PPP/3RKB1R b K - 0 13");
         test_fen("8/pppp1ppp/8/4p3/8/7P/PPPPPPP1/8 w - e6 0 13");
+    }
+
+    #[test]
+    fn neighbour_squares() {
+        assert_eq!(Square::A1.neighbour(Direction::North), Some(Square::A2));
+        assert_eq!(Square::A2.neighbour(Direction::South), Some(Square::A1));
+        assert_eq!(Square::A1.neighbour(Direction::East), Some(Square::B1));
+        assert_eq!(Square::B1.neighbour(Direction::West), Some(Square::A1));
+
+        assert_eq!(Square::A1.neighbour(Direction::NorthEast), Some(Square::B2));
+        assert_eq!(Square::B2.neighbour(Direction::SouthWest), Some(Square::A1));
+        assert_eq!(Square::B1.neighbour(Direction::NorthWest), Some(Square::A2));
+        assert_eq!(Square::A2.neighbour(Direction::SouthEast), Some(Square::B1));
     }
 }

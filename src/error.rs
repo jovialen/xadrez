@@ -2,8 +2,9 @@
 //!
 //! Provides the error types used by the chess engine.
 
-use core::fmt;
-use std::{error::Error, num::ParseIntError};
+#[cfg(doc)]
+use crate::board::Chessboard;
+use std::{error::Error, fmt, num::ParseIntError};
 
 /// An error which can be returned while parsing a FEN string.
 #[derive(Debug)]
@@ -37,6 +38,14 @@ pub enum ParseLANError {
     InvalidSize,
     /// The input was empty.
     Empty,
+}
+
+/// An error which can be returned when attempting to make a move on a
+/// [`Chessboard`].
+#[derive(Debug)]
+pub enum MoveError {
+    /// The move was not legal.
+    IllegalMove,
 }
 
 impl Error for ParseFenError {
@@ -78,6 +87,20 @@ impl Error for ParseLANError {
 }
 
 impl fmt::Display for ParseLANError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.description())
+    }
+}
+
+impl Error for MoveError {
+    fn description(&self) -> &str {
+        match self {
+            Self::IllegalMove => "move is not legal",
+        }
+    }
+}
+
+impl fmt::Display for MoveError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.description())
     }

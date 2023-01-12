@@ -25,6 +25,10 @@ pub(crate) enum MoveKind {
     Any,
     Quiet,
     Capture,
+    // Although the En Passant is tecnically when a pawn is captured after a pawn push, here it is
+    // used for when the pawn makes the move that allows for an en passant. The capture itself is
+    // represented as a capture move.
+    EnPassant,
     Promotion(PieceKind),
 }
 

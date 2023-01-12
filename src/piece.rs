@@ -3,7 +3,7 @@
 //! Provides the structures used relating to the pieces on the chessboard.
 
 use crate::error::ParseFenError;
-use std::fmt;
+use std::{fmt, ops};
 
 /// Constants for all the types of chess pieces.
 pub mod piece_constants {
@@ -127,6 +127,8 @@ pub enum PieceKind {
     Pawn,
 }
 
+pub(crate) const PIECE_KIND_COUNT: usize = 6;
+
 impl Piece {
     /// Create a new chess piece.
     ///
@@ -161,6 +163,17 @@ impl fmt::Display for Piece {
         };
 
         write!(f, "{}", c)
+    }
+}
+
+impl ops::Not for Side {
+    type Output = Self;
+
+    fn not(self) -> Self::Output {
+        match self {
+            Self::White => Self::Black,
+            Self::Black => Self::White,
+        }
     }
 }
 
