@@ -198,6 +198,15 @@ mod tests {
             assert_ne!(Move::new(A1, A2, Any), Move::new(A1, A2, Promotion(Bishop)));
             assert_ne!(Move::new(A1, A2, Any), Move::new(A1, A2, Promotion(Rook)));
             assert_ne!(Move::new(A1, A2, Any), Move::new(A1, A2, Promotion(Knight)));
+
+            assert_eq!(Move::new(A1, A2, Quiet), Move::new(A1, A2, Any));
+            assert_eq!(Move::new(A1, A2, Capture), Move::new(A1, A2, Any));
+            assert_eq!(Move::new(A1, A2, EnPassant), Move::new(A1, A2, Any));
+
+            assert_ne!(Move::new(A1, A2, Promotion(Queen)), Move::new(A1, A2, Any));
+            assert_ne!(Move::new(A1, A2, Promotion(Bishop)), Move::new(A1, A2, Any));
+            assert_ne!(Move::new(A1, A2, Promotion(Rook)), Move::new(A1, A2, Any));
+            assert_ne!(Move::new(A1, A2, Promotion(Knight)), Move::new(A1, A2, Any));
         }
 
         #[test]
