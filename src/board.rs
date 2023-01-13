@@ -108,6 +108,7 @@ impl Chessboard {
     ///
     /// * `fen` - FEN string of the new position.
     pub fn set_position(&mut self, fen: &str) -> Result<(), ParseFenError> {
+        self.save_current_to_history();
         self.position = Position::from_str(fen)?;
         self.legal_moves = movegen::generate_legal_moves(&self.position);
         Ok(())
@@ -129,13 +130,13 @@ impl Chessboard {
         // Check if move is legal
         let m = if let Some(legal) = self.legal_moves.iter().find(|&legal| legal == &m) {
             // Filter out Any kind moves with the actual legal equivilant.
-            legal
+            *legal
         } else {
             return Err(MoveError::IllegalMove);
         };
 
         // Save the current position in the history
-        self.history.push((self.position, self.legal_moves.clone()));
+        self.save_current_to_history();
 
         // Safety: There will always be a from piece if the move is legal, and that was
         // confirmed above.
@@ -244,6 +245,10 @@ impl Chessboard {
     /// with its position on the board.
     pub fn pieces(&self) -> Vec<(Piece, Square)> {
         self.position.pieces()
+    }
+
+    fn save_current_to_history(&mut self) {
+        self.history.push((self.position, self.legal_moves.clone()));
     }
 }
 
