@@ -185,6 +185,7 @@ mod tests {
     }
 
     mod eq {
+        #[allow(clippy::enum_glob_use)]
         use super::{MoveKind::*, *};
         use crate::{
             board::Square::{A1, A2, A3, B1},
