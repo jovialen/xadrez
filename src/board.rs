@@ -488,11 +488,17 @@ impl Square {
     }
 }
 
+impl From<Square> for usize {
+    fn from(value: Square) -> Self {
+        value as usize
+    }
+}
+
 impl TryFrom<usize> for Square {
     type Error = ParseFenError;
 
     fn try_from(value: usize) -> Result<Self, Self::Error> {
-        num::FromPrimitive::from_usize(usize::from(value)).ok_or(ParseFenError::InvalidSquare)
+        num::FromPrimitive::from_usize(value).ok_or(ParseFenError::InvalidSquare)
     }
 }
 
@@ -500,13 +506,7 @@ impl TryFrom<isize> for Square {
     type Error = ParseFenError;
 
     fn try_from(value: isize) -> Result<Self, Self::Error> {
-        num::FromPrimitive::from_isize(isize::from(value)).ok_or(ParseFenError::InvalidSquare)
-    }
-}
-
-impl Into<usize> for Square {
-    fn into(self) -> usize {
-        self as usize
+        num::FromPrimitive::from_isize(value).ok_or(ParseFenError::InvalidSquare)
     }
 }
 
@@ -521,7 +521,7 @@ impl FromStr for Square {
             .ok_or(ParseFenError::InvalidSquare)?
             .to_ascii_uppercase()
         {
-            file @ 'A'..='H' => file as u8 - 'A' as u8,
+            file @ 'A'..='H' => file as u8 - b'A',
             _ => Err(ParseFenError::InvalidSquare)?,
         };
 

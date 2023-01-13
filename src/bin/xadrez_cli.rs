@@ -38,7 +38,7 @@ fn pretty_print_position<'a, I: Iterator<Item = &'a str>>(board: &Chessboard, mu
                 " {} |",
                 match piece {
                     Some(p) => p.to_string(),
-                    None if board.moves().into_iter().any(|m| m.to == square) =>
+                    None if board.moves().iter().any(|m| m.to == square) =>
                         attack_square_char.to_string(),
                     _ => " ".to_string(),
                 }
@@ -70,7 +70,7 @@ fn print_moves<'a, I: Iterator<Item = &'a str>>(board: &Chessboard, mut args: I)
     let filter = args.next().unwrap_or("");
     for m in board
         .moves()
-        .into_iter()
+        .iter()
         .filter(|m| m.to_string().contains(filter))
     {
         println!("{}", m);

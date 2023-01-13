@@ -356,7 +356,7 @@ fn init_piece_moves() -> PieceMoveBitboards {
         let king_offsets = [1, -1, 8, -8, 9, -9, 7, -7];
         for offset in king_offsets {
             let dest_i = i as isize + offset;
-            if let Some(dest) = Square::try_from(dest_i).ok() {
+            if let Ok(dest) = Square::try_from(dest_i) {
                 if from.distance(dest) <= 2.0 {
                     moves[PieceKind::King as usize][i].on(dest);
                 }
@@ -366,7 +366,7 @@ fn init_piece_moves() -> PieceMoveBitboards {
         let knight_offsets = [-17, -15, -10, -6, 6, 10, 15, 17];
         for offset in knight_offsets {
             let dest_i = i as isize + offset;
-            if let Some(dest) = Square::try_from(dest_i).ok() {
+            if let Ok(dest) = Square::try_from(dest_i) {
                 if from.distance(dest) <= 3.0 {
                     moves[PieceKind::Knight as usize][i].on(dest);
                 }
@@ -403,13 +403,13 @@ fn init_pawn_moves() -> PawnMoveBitboards {
             let dest_i = i as isize + offset;
             let dest_bi = bi as isize - offset;
 
-            if let Some(dest) = Square::try_from(dest_i).ok() {
+            if let Ok(dest) = Square::try_from(dest_i) {
                 if from.distance(dest) <= 2.0 {
                     moves[Side::White as usize][i].1.on(dest);
                 }
             }
 
-            if let Some(dest) = Square::try_from(dest_bi).ok() {
+            if let Ok(dest) = Square::try_from(dest_bi) {
                 if from.distance(dest) <= 2.0 {
                     moves[Side::Black as usize][i].1.on(dest);
                 }

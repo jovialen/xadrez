@@ -30,7 +30,7 @@ pub(crate) mod bitboard_constants {
     pub(crate) const BITBOARD_INNER: Bitboard = Bitboard(!0xFF818181818181FF);
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, Default, PartialEq)]
 pub(crate) struct Bitboard(pub u64);
 
 impl Bitboard {
@@ -83,14 +83,6 @@ impl Bitboard {
         let lsb = self.lsb()?;
         self.off(lsb);
         Some(lsb)
-    }
-}
-
-impl Default for Bitboard {
-    fn default() -> Self {
-        // Could just use the macro, but just in case its ever changed so the default of
-        // u64 isnt 0
-        Self(0)
     }
 }
 
