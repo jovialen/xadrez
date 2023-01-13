@@ -1,6 +1,12 @@
 //! A chess engine.
 
 #![warn(missing_docs)]
+// Enable all clippy checks
+#![warn(clippy::suspicious)]
+#![warn(clippy::complexity)]
+#![warn(clippy::perf)]
+#![warn(clippy::style)]
+#![warn(clippy::pedantic)]
 
 mod bitboards;
 pub mod board;

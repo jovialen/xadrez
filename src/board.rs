@@ -2,6 +2,7 @@
 //!
 //! Provides the structures relating to the chessboard as a whole.
 
+#[allow(clippy::wildcard_imports)]
 use crate::{
     bitboards::{bitboard_constants::*, Bitboard},
     error::{MoveError, ParseFenError},
@@ -83,6 +84,7 @@ impl Chessboard {
     ///
     /// If the FEN string is invalid. If the FEN string may be invalid, use
     /// [`Chessboard::from_fen`] instead.
+    #[must_use]
     pub fn new(fen: &str) -> Self {
         Self::from_fen(fen).unwrap()
     }
@@ -92,6 +94,10 @@ impl Chessboard {
     /// # Arguments
     ///
     /// * `fen` - The FEN string to parse.
+    ///
+    /// # Errors
+    ///
+    /// Can return a [`ParseFenError`] if the given FEN string is not valid.
     pub fn from_fen(fen: &str) -> Result<Self, ParseFenError> {
         let position = Position::from_str(fen)?;
 
@@ -107,6 +113,10 @@ impl Chessboard {
     /// # Arguments
     ///
     /// * `fen` - FEN string of the new position.
+    ///
+    /// # Errors
+    ///
+    /// Can return a [`ParseFenError`] if the given FEN string is not valid.
     pub fn set_position(&mut self, fen: &str) -> Result<(), ParseFenError> {
         self.save_current_to_history();
         self.position = Position::from_str(fen)?;
@@ -115,6 +125,7 @@ impl Chessboard {
     }
 
     /// Get all possible legal moves.
+    #[must_use]
     pub fn moves(&self) -> &Vec<Move> {
         &self.legal_moves
     }
@@ -126,6 +137,11 @@ impl Chessboard {
     /// # Arguments
     ///
     /// * `m` - A legal move to make on the board.
+    ///
+    /// # Errors
+    ///
+    /// Will return a [`MoveError`] if the given move cannot be made on the
+    /// board.
     pub fn make_move(&mut self, m: Move) -> Result<(), MoveError> {
         // Check if move is legal
         let m = if let Some(legal) = self.legal_moves.iter().find(|&legal| legal == &m) {
@@ -160,7 +176,7 @@ impl Chessboard {
                 // The index of the square that was jumped over in the pawn push will always be
                 // the sum of the indices of the to and from divided by two.
                 let ep_index = (m.from as usize + m.to as usize) / 2;
-                self.position.en_passant = Some(Square::try_from(ep_index).unwrap())
+                self.position.en_passant = Some(Square::try_from(ep_index).unwrap());
             }
             MoveKind::Capture => self.position.halftime = 0,
             MoveKind::Promotion(into) => {
@@ -169,7 +185,7 @@ impl Chessboard {
                 }
             }
             MoveKind::Any => unreachable!("No move of kind \"Any\" should ever be used."),
-            _ => (),
+            MoveKind::Quiet => (),
         }
 
         if to_move.kind == PieceKind::Pawn {
@@ -226,6 +242,7 @@ impl Chessboard {
     /// # Arguments
     ///
     /// * `m` - The move to validate.
+    #[must_use]
     pub fn is_legal(&self, m: Move) -> bool {
         self.legal_moves.contains(&m)
     }
@@ -235,6 +252,7 @@ impl Chessboard {
     /// This function returns a refrence to the internal one dimentional array
     /// of squares. The array is laid out such that it can be directly
     /// indexed with the integer values of the [`Square`] enum.
+    #[must_use]
     pub fn squares(&self) -> &[Option<Piece>; BOARD_SIZE] {
         &self.position.squares
     }
@@ -243,6 +261,7 @@ impl Chessboard {
     ///
     /// This function returns a vector of all the pieces on the board in a toupe
     /// with its position on the board.
+    #[must_use]
     pub fn pieces(&self) -> Vec<(Piece, Square)> {
         self.position.pieces()
     }
@@ -415,8 +434,13 @@ impl Square {
     ///
     /// # Arguments
     ///
-    /// * `rank` - The rank of the square.
-    /// * `file` - The file of the square.
+    /// * `rank` - The rank of the square, from 0 to 7.
+    /// * `file` - The file of the square, from 0 to 7.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`ParseFenError::InvalidSquare`] error if the given rank and
+    /// file are outside of the board bounds.
     pub fn from_rank_file<R, F>(rank: R, file: F) -> Result<Self, ParseFenError>
     where
         usize: From<R> + From<F>,
@@ -432,6 +456,7 @@ impl Square {
     }
 
     /// Get the rank and file of the square.
+    #[must_use]
     pub fn to_rank_file(&self) -> (usize, usize) {
         let rank = *self as usize / BOARD_FILES;
         let file = *self as usize % BOARD_FILES;
@@ -439,24 +464,25 @@ impl Square {
     }
 
     /// Get the distance between two squares.
+    #[must_use]
     pub fn distance(&self, rhs: Self) -> f64 {
         let (sr, sf) = self.to_rank_file();
         let (rr, rf) = rhs.to_rank_file();
-        let xdiff = (sf as i32 - rf as i32) as f64;
-        let ydiff = (sr as i32 - rr as i32) as f64;
-        (xdiff.powf(2.0) + ydiff.powf(2.0)).sqrt()
+        let x_diff = f64::from(sf as i32 - rf as i32);
+        let y_diff = f64::from(sr as i32 - rr as i32);
+        (x_diff.powf(2.0) + y_diff.powf(2.0)).sqrt()
     }
 
     #[inline]
-    pub(crate) fn neighbour(&self, direction: Direction) -> Option<Square> {
-        match Square::try_from(*self as isize + direction.offset()) {
+    pub(crate) fn neighbour(self, direction: Direction) -> Option<Square> {
+        match Square::try_from(self as isize + direction.offset()) {
             Ok(dest) if self.distance(dest) <= 2.0 => Some(dest),
             _ => None,
         }
     }
 
     #[inline]
-    pub(crate) fn rank(&self) -> Bitboard {
+    pub(crate) fn rank(self) -> Bitboard {
         let (rank, _) = self.to_rank_file();
         match rank {
             0 => BITBOARD_RANK_1,
@@ -472,7 +498,7 @@ impl Square {
     }
 
     #[inline]
-    pub(crate) fn file(&self) -> Bitboard {
+    pub(crate) fn file(self) -> Bitboard {
         let (_, file) = self.to_rank_file();
         match file {
             0 => BITBOARD_FILE_A,
@@ -532,19 +558,20 @@ impl FromStr for Square {
             .ok_or(ParseFenError::InvalidSquare)?
             - 1;
 
-        Square::from_rank_file(rank as u16, file as u16)
+        Square::from_rank_file(rank as u16, file)
     }
 }
 
 impl fmt::Display for Square {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
 impl Direction {
-    fn offset(&self) -> isize {
-        match *self {
+    #[allow(clippy::cast_possible_wrap)]
+    fn offset(self) -> isize {
+        match self {
             Self::North => BOARD_FILES as isize,
             Self::East => 1,
             Self::South => -(BOARD_FILES as isize),

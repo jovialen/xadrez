@@ -7,6 +7,7 @@ use std::{fmt, ops};
 
 /// Constants for all the types of chess pieces.
 pub mod piece_constants {
+    #[allow(clippy::enum_glob_use)]
     use super::{Piece, PieceKind::*, Side::*};
 
     /// The white king.
@@ -136,6 +137,7 @@ impl Piece {
     ///
     /// * `side` - The side the chess piece is on.
     /// * `kind` - The kind of the piece.
+    #[must_use]
     pub fn new(side: Side, kind: PieceKind) -> Self {
         Piece { kind, side }
     }
@@ -162,7 +164,7 @@ impl fmt::Display for Piece {
             c.to_lowercase()
         };
 
-        write!(f, "{}", c)
+        write!(f, "{c}")
     }
 }
 

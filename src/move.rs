@@ -78,7 +78,7 @@ impl fmt::Display for Move {
         f.write_str(format!("{}{}", self.from, self.to).to_lowercase().as_str())?;
 
         match self.kind {
-            MoveKind::Promotion(to) => f.write_str(format!("{}", to).to_uppercase().as_str()),
+            MoveKind::Promotion(to) => f.write_str(format!("{to}").to_uppercase().as_str()),
             _ => Ok(()),
         }
     }
@@ -91,8 +91,9 @@ impl PartialEq for Move {
 }
 
 impl PartialEq<MoveKind> for Move {
+    #[allow(clippy::match_same_arms)]
     fn eq(&self, other: &MoveKind) -> bool {
-        use MoveKind::*;
+        use MoveKind::{Any, Promotion};
 
         match (self.kind, *other) {
             (Any, Promotion(_)) => false,
@@ -185,7 +186,10 @@ mod tests {
 
     mod eq {
         use super::{MoveKind::*, *};
-        use crate::{board::Square::*, piece::PieceKind::*};
+        use crate::{
+            board::Square::{A1, A2, A3, B1},
+            piece::PieceKind::{Bishop, Knight, Queen, Rook},
+        };
 
         #[test]
         fn any_is_all_except_promotion() {

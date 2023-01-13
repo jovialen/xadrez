@@ -6,28 +6,28 @@ pub(crate) mod bitboard_constants {
 
     use super::Bitboard;
 
-    pub(crate) const BITBOARD_ALL: Bitboard = Bitboard(0xFFFFFFFFFFFFFFFF);
+    pub(crate) const BITBOARD_ALL: Bitboard = Bitboard(0xFFFF_FFFF_FFFF_FFFF);
 
-    pub(crate) const BITBOARD_FILE_A: Bitboard = Bitboard(0x0101010101010101);
-    pub(crate) const BITBOARD_FILE_B: Bitboard = Bitboard(0x0202020202020202);
-    pub(crate) const BITBOARD_FILE_C: Bitboard = Bitboard(0x0404040404040404);
-    pub(crate) const BITBOARD_FILE_D: Bitboard = Bitboard(0x0808080808080808);
-    pub(crate) const BITBOARD_FILE_E: Bitboard = Bitboard(0x1010101010101010);
-    pub(crate) const BITBOARD_FILE_F: Bitboard = Bitboard(0x2020202020202020);
-    pub(crate) const BITBOARD_FILE_G: Bitboard = Bitboard(0x4040404040404040);
-    pub(crate) const BITBOARD_FILE_H: Bitboard = Bitboard(0x8080808080808080);
+    pub(crate) const BITBOARD_FILE_A: Bitboard = Bitboard(0x0101_0101_0101_0101);
+    pub(crate) const BITBOARD_FILE_B: Bitboard = Bitboard(0x0202_0202_0202_0202);
+    pub(crate) const BITBOARD_FILE_C: Bitboard = Bitboard(0x0404_0404_0404_0404);
+    pub(crate) const BITBOARD_FILE_D: Bitboard = Bitboard(0x0808_0808_0808_0808);
+    pub(crate) const BITBOARD_FILE_E: Bitboard = Bitboard(0x1010_1010_1010_1010);
+    pub(crate) const BITBOARD_FILE_F: Bitboard = Bitboard(0x2020_2020_2020_2020);
+    pub(crate) const BITBOARD_FILE_G: Bitboard = Bitboard(0x4040_4040_4040_4040);
+    pub(crate) const BITBOARD_FILE_H: Bitboard = Bitboard(0x8080_8080_8080_8080);
 
-    pub(crate) const BITBOARD_RANK_1: Bitboard = Bitboard(0x00000000000000FF);
-    pub(crate) const BITBOARD_RANK_2: Bitboard = Bitboard(0x000000000000FF00);
-    pub(crate) const BITBOARD_RANK_3: Bitboard = Bitboard(0x0000000000FF0000);
-    pub(crate) const BITBOARD_RANK_4: Bitboard = Bitboard(0x00000000FF000000);
-    pub(crate) const BITBOARD_RANK_5: Bitboard = Bitboard(0x000000FF00000000);
-    pub(crate) const BITBOARD_RANK_6: Bitboard = Bitboard(0x0000FF0000000000);
-    pub(crate) const BITBOARD_RANK_7: Bitboard = Bitboard(0x00FF000000000000);
-    pub(crate) const BITBOARD_RANK_8: Bitboard = Bitboard(0xFF00000000000000);
+    pub(crate) const BITBOARD_RANK_1: Bitboard = Bitboard(0x0000_0000_0000_00FF);
+    pub(crate) const BITBOARD_RANK_2: Bitboard = Bitboard(0x0000_0000_0000_FF00);
+    pub(crate) const BITBOARD_RANK_3: Bitboard = Bitboard(0x0000_0000_00FF_0000);
+    pub(crate) const BITBOARD_RANK_4: Bitboard = Bitboard(0x0000_0000_FF00_0000);
+    pub(crate) const BITBOARD_RANK_5: Bitboard = Bitboard(0x0000_00FF_0000_0000);
+    pub(crate) const BITBOARD_RANK_6: Bitboard = Bitboard(0x0000_FF00_0000_0000);
+    pub(crate) const BITBOARD_RANK_7: Bitboard = Bitboard(0x00FF_0000_0000_0000);
+    pub(crate) const BITBOARD_RANK_8: Bitboard = Bitboard(0xFF00_0000_0000_0000);
 
-    pub(crate) const BITBOARD_EDGES: Bitboard = Bitboard(0xFF818181818181FF);
-    pub(crate) const BITBOARD_INNER: Bitboard = Bitboard(!0xFF818181818181FF);
+    pub(crate) const BITBOARD_EDGES: Bitboard = Bitboard(0xFF81_8181_8181_81FF);
+    pub(crate) const BITBOARD_INNER: Bitboard = Bitboard(!0xFF81_8181_8181_81FF);
 }
 
 #[derive(Clone, Copy, Default, PartialEq)]
@@ -35,7 +35,7 @@ pub(crate) struct Bitboard(pub u64);
 
 impl Bitboard {
     #[inline]
-    pub fn get<T>(&self, index: T) -> bool
+    pub fn get<T>(self, index: T) -> bool
     where
         T: Into<usize>,
     {
@@ -58,7 +58,8 @@ impl Bitboard {
         self.0 &= !(0b1 << index.into());
     }
 
-    pub fn lsb(&self) -> Option<usize> {
+    #[allow(clippy::if_not_else)]
+    pub fn lsb(self) -> Option<usize> {
         // Using this method of finding the least signifigant bit:
         // https://www.chessprogramming.org/BitScan#With_separated_LS1B
 
@@ -67,7 +68,7 @@ impl Bitboard {
             44, 38, 32, 29, 23, 17, 11, 4, 62, 46, 55, 26, 59, 40, 36, 15, 53, 34, 51, 20, 43, 31,
             22, 10, 45, 25, 39, 14, 33, 19, 30, 9, 24, 13, 18, 8, 12, 7, 6, 5, 63,
         ];
-        const DEBRUIJN: u64 = 0x03f79d71b4cb0a89;
+        const DEBRUIJN: u64 = 0x03f7_9d71_b4cb_0a89;
 
         if self.0 != 0 {
             let i = (((self.0 ^ (self.0 - 1)).wrapping_mul(DEBRUIJN)) >> 58) as usize;
@@ -248,7 +249,7 @@ impl fmt::Debug for Bitboard {
 
 #[cfg(test)]
 mod tests {
-    use super::{bitboard_constants::*, *};
+    use super::{bitboard_constants::BITBOARD_ALL, *};
     use crate::board::Square;
 
     #[test]
@@ -272,7 +273,7 @@ mod tests {
 
     #[test]
     fn get_bits() {
-        let bitboard = Bitboard(0b1000100101);
+        let bitboard = Bitboard(0b10_0010_0101);
 
         assert_eq!(bitboard.get(Square::A1), true);
         assert_eq!(bitboard.get(Square::B1), false);
@@ -288,16 +289,16 @@ mod tests {
 
     #[test]
     fn pop_lsb() {
-        let mut bitboard = Bitboard(0b111000100);
+        let mut bitboard = Bitboard(0b1_1100_0100);
 
         assert_eq!(bitboard.pop_lsb(), Some(2));
-        assert_eq!(bitboard, Bitboard(0b111000000));
+        assert_eq!(bitboard, Bitboard(0b1_1100_0000));
 
         assert_eq!(bitboard.pop_lsb(), Some(6));
-        assert_eq!(bitboard, Bitboard(0b110000000));
+        assert_eq!(bitboard, Bitboard(0b1_1000_0000));
 
         assert_eq!(bitboard.pop_lsb(), Some(7));
-        assert_eq!(bitboard, Bitboard(0b100000000));
+        assert_eq!(bitboard, Bitboard(0b1_0000_0000));
 
         assert_eq!(bitboard.pop_lsb(), Some(8));
         assert_eq!(bitboard, Bitboard(0));

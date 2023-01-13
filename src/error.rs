@@ -2,6 +2,8 @@
 //!
 //! Provides the error types used by the chess engine.
 
+#![allow(clippy::module_name_repetitions)]
+
 #[cfg(doc)]
 use crate::board::Chessboard;
 use std::{error::Error, fmt, num::ParseIntError};

@@ -23,6 +23,7 @@ impl<'a> TryFrom<&'a str> for FenString<'a> {
     type Error = ParseFenError;
 
     fn try_from(fen: &'a str) -> Result<Self, Self::Error> {
+        #[allow(clippy::enum_glob_use)]
         use ParseFenError::*;
 
         let mut iter = fen.split_whitespace();

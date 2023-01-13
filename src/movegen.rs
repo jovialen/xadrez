@@ -1,3 +1,4 @@
+#[allow(clippy::wildcard_imports)]
 use crate::{
     bitboards::{bitboard_constants::*, Bitboard},
     board::{Direction, Position, Square, BOARD_FILES, BOARD_SIZE},
@@ -52,139 +53,139 @@ const BISHOP_BITS: [usize; BOARD_SIZE] = [
 // Pre-generated valid magic numbers for the rook.
 // Source: https://github.com/maksimKorzh/chess_programming/blob/master/src/magics/magics.c
 const ROOK_MAGICS: [u64; BOARD_SIZE] = [
-    0xa8002c000108020,
-    0x6c00049b0002001,
-    0x100200010090040,
-    0x2480041000800801,
-    0x280028004000800,
-    0x900410008040022,
-    0x280020001001080,
-    0x2880002041000080,
-    0xa000800080400034,
-    0x4808020004000,
-    0x2290802004801000,
-    0x411000d00100020,
-    0x402800800040080,
-    0xb000401004208,
-    0x2409000100040200,
-    0x1002100004082,
-    0x22878001e24000,
-    0x1090810021004010,
-    0x801030040200012,
-    0x500808008001000,
-    0xa08018014000880,
-    0x8000808004000200,
-    0x201008080010200,
-    0x801020000441091,
-    0x800080204005,
-    0x1040200040100048,
-    0x120200402082,
-    0xd14880480100080,
-    0x12040280080080,
-    0x100040080020080,
-    0x9020010080800200,
-    0x813241200148449,
-    0x491604001800080,
-    0x100401000402001,
-    0x4820010021001040,
-    0x400402202000812,
-    0x209009005000802,
-    0x810800601800400,
-    0x4301083214000150,
-    0x204026458e001401,
-    0x40204000808000,
-    0x8001008040010020,
-    0x8410820820420010,
-    0x1003001000090020,
-    0x804040008008080,
-    0x12000810020004,
-    0x1000100200040208,
-    0x430000a044020001,
-    0x280009023410300,
-    0xe0100040002240,
-    0x200100401700,
-    0x2244100408008080,
-    0x8000400801980,
-    0x2000810040200,
-    0x8010100228810400,
-    0x2000009044210200,
-    0x4080008040102101,
-    0x40002080411d01,
-    0x2005524060000901,
-    0x502001008400422,
-    0x489a000810200402,
-    0x1004400080a13,
-    0x4000011008020084,
-    0x26002114058042,
+    0x0a80_02c0_0010_8020,
+    0x06c0_0049_b000_2001,
+    0x0100_2000_1009_0040,
+    0x2480_0410_0080_0801,
+    0x0280_0280_0400_0800,
+    0x0900_4100_0804_0022,
+    0x0280_0200_0100_1080,
+    0x2880_0020_4100_0080,
+    0xa000_8000_8040_0034,
+    0x0004_8080_2000_4000,
+    0x2290_8020_0480_1000,
+    0x0411_000d_0010_0020,
+    0x0402_8008_0004_0080,
+    0x000b_0004_0100_4208,
+    0x2409_0001_0004_0200,
+    0x0001_0021_0000_4082,
+    0x0022_8780_01e2_4000,
+    0x1090_8100_2100_4010,
+    0x0801_0300_4020_0012,
+    0x0500_8080_0800_1000,
+    0x0a08_0180_1400_0880,
+    0x8000_8080_0400_0200,
+    0x0201_0080_8001_0200,
+    0x0801_0200_0044_1091,
+    0x8000_8020_4005,
+    0x1040_2000_4010_0048,
+    0x1202_0040_2082,
+    0x0d14_8804_8010_0080,
+    0x0012_0402_8008_0080,
+    0x0100_0400_8002_0080,
+    0x9020_0100_8080_0200,
+    0x0813_2412_0014_8449,
+    0x0491_6040_0180_0080,
+    0x0100_4010_0040_2001,
+    0x4820_0100_2100_1040,
+    0x0400_4022_0200_0812,
+    0x0209_0090_0500_0802,
+    0x0810_8006_0180_0400,
+    0x4301_0832_1400_0150,
+    0x2040_2645_8e00_1401,
+    0x0040_2040_0080_8000,
+    0x8001_0080_4001_0020,
+    0x8410_8208_2042_0010,
+    0x1003_0010_0009_0020,
+    0x0804_0400_0800_8080,
+    0x0012_0008_1002_0004,
+    0x1000_1002_0004_0208,
+    0x4300_00a0_4402_0001,
+    0x0280_0090_2341_0300,
+    0x00e0_1000_4000_2240,
+    0x2001_0040_1700,
+    0x2244_1004_0800_8080,
+    0x0008_0004_0080_1980,
+    0x0002_0008_1004_0200,
+    0x8010_1002_2881_0400,
+    0x2000_0090_4421_0200,
+    0x4080_0080_4010_2101,
+    0x0040_0020_8041_1d01,
+    0x2005_5240_6000_0901,
+    0x0502_0010_0840_0422,
+    0x489a_0008_1020_0402,
+    0x0001_0044_0008_0a13,
+    0x4000_0110_0802_0084,
+    0x0026_0021_1405_8042,
 ];
 
 // Pre-generated valid magic numbers for the bishop.
 // Source: https://github.com/maksimKorzh/chess_programming/blob/master/src/magics/magics.c
 const BISHOP_MAGICS: [u64; BOARD_SIZE] = [
-    0x89a1121896040240,
-    0x2004844802002010,
-    0x2068080051921000,
-    0x62880a0220200808,
-    0x4042004000000,
-    0x100822020200011,
-    0xc00444222012000a,
-    0x28808801216001,
-    0x400492088408100,
-    0x201c401040c0084,
-    0x840800910a0010,
-    0x82080240060,
-    0x2000840504006000,
-    0x30010c4108405004,
-    0x1008005410080802,
-    0x8144042209100900,
-    0x208081020014400,
-    0x4800201208ca00,
-    0xf18140408012008,
-    0x1004002802102001,
-    0x841000820080811,
-    0x40200200a42008,
-    0x800054042000,
-    0x88010400410c9000,
-    0x520040470104290,
-    0x1004040051500081,
-    0x2002081833080021,
-    0x400c00c010142,
-    0x941408200c002000,
-    0x658810000806011,
-    0x188071040440a00,
-    0x4800404002011c00,
-    0x104442040404200,
-    0x511080202091021,
-    0x4022401120400,
-    0x80c0040400080120,
-    0x8040010040820802,
-    0x480810700020090,
-    0x102008e00040242,
-    0x809005202050100,
-    0x8002024220104080,
-    0x431008804142000,
-    0x19001802081400,
-    0x200014208040080,
-    0x3308082008200100,
-    0x41010500040c020,
-    0x4012020c04210308,
-    0x208220a202004080,
-    0x111040120082000,
-    0x6803040141280a00,
-    0x2101004202410000,
-    0x8200000041108022,
-    0x21082088000,
-    0x2410204010040,
-    0x40100400809000,
-    0x822088220820214,
-    0x40808090012004,
-    0x910224040218c9,
-    0x402814422015008,
-    0x90014004842410,
-    0x1000042304105,
-    0x10008830412a00,
-    0x2520081090008908,
-    0x40102000a0a60140,
+    0x89a1_1218_9604_0240,
+    0x2004_8448_0200_2010,
+    0x2068_0800_5192_1000,
+    0x6288_0a02_2020_0808,
+    0x0004_0420_0400_0000,
+    0x0100_8220_2020_0011,
+    0xc004_4422_2012_000a,
+    0x0028_8088_0121_6001,
+    0x0400_4920_8840_8100,
+    0x0201_c401_040c_0084,
+    0x0084_0800_910a_0010,
+    0x0820_8024_0060,
+    0x2000_8405_0400_6000,
+    0x3001_0c41_0840_5004,
+    0x1008_0054_1008_0802,
+    0x8144_0422_0910_0900,
+    0x0208_0810_2001_4400,
+    0x0048_0020_1208_ca00,
+    0x0f18_1404_0801_2008,
+    0x1004_0028_0210_2001,
+    0x0841_0008_2008_0811,
+    0x0040_2002_00a4_2008,
+    0x8000_5404_2000,
+    0x8801_0400_410c_9000,
+    0x0520_0404_7010_4290,
+    0x1004_0400_5150_0081,
+    0x2002_0818_3308_0021,
+    0x0004_00c0_0c01_0142,
+    0x9414_0820_0c00_2000,
+    0x0658_8100_0080_6011,
+    0x0188_0710_4044_0a00,
+    0x4800_4040_0201_1c00,
+    0x0104_4420_4040_4200,
+    0x0511_0802_0209_1021,
+    0x0004_0224_0112_0400,
+    0x80c0_0404_0008_0120,
+    0x8040_0100_4082_0802,
+    0x0480_8107_0002_0090,
+    0x0102_008e_0004_0242,
+    0x0809_0052_0205_0100,
+    0x8002_0242_2010_4080,
+    0x0431_0088_0414_2000,
+    0x0019_0018_0208_1400,
+    0x0200_0142_0804_0080,
+    0x3308_0820_0820_0100,
+    0x0410_1050_0040_c020,
+    0x4012_020c_0421_0308,
+    0x2082_20a2_0200_4080,
+    0x0111_0401_2008_2000,
+    0x6803_0401_4128_0a00,
+    0x2101_0042_0241_0000,
+    0x8200_0000_4110_8022,
+    0x0210_8208_8000,
+    0x0002_4102_0401_0040,
+    0x0040_1004_0080_9000,
+    0x0822_0882_2082_0214,
+    0x0040_8080_9001_2004,
+    0x0091_0224_0402_18c9,
+    0x0402_8144_2201_5008,
+    0x0090_0140_0484_2410,
+    0x0001_0000_4230_4105,
+    0x0010_0088_3041_2a00,
+    0x2520_0810_9000_8908,
+    0x4010_2000_a0a6_0140,
 ];
 
 #[derive(Default)]
@@ -431,7 +432,7 @@ fn seek_sliding(directions: &[Direction], origin: Square, blockers: Bitboard) ->
                 break;
             }
 
-            current = next
+            current = next;
         }
     }
     result
@@ -491,7 +492,7 @@ impl<const T: usize> MagicTable<T> {
             let variations = 1 << mask_size;
 
             for j in 0..variations {
-                let occupancy = set_occupancy(j as u64, mask_size, magic.mask);
+                let occupancy = set_occupancy(j, mask_size, magic.mask);
                 let magic_index = magic.index_of(occupancy);
                 table[magic_index] = seek_sliding(directions, square, occupancy);
             }
@@ -510,6 +511,7 @@ impl<const T: usize> MagicTable<T> {
 }
 
 impl Magic {
+    #[allow(clippy::cast_possible_truncation)]
     fn index_of(&self, mut occupied: Bitboard) -> usize {
         occupied &= self.mask;
         occupied *= Bitboard(self.magic);
@@ -546,105 +548,105 @@ mod tests {
         fn perft_test_01() {
             let fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
             let mut chessboard = Chessboard::from_fen(fen).unwrap();
-            assert_eq!(chessboard.perft(6), 119060324);
+            assert_eq!(chessboard.perft(6), 119_060_324);
         }
 
         #[test]
         fn perft_test_02() {
             let fen = "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 0";
             let mut chessboard = Chessboard::from_fen(fen).unwrap();
-            assert_eq!(chessboard.perft(5), 193690690);
+            assert_eq!(chessboard.perft(5), 193_690_690);
         }
 
         #[test]
         fn perft_test_03() {
             let fen = "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 0";
             let mut chessboard = Chessboard::from_fen(fen).unwrap();
-            assert_eq!(chessboard.perft(7), 178633661);
+            assert_eq!(chessboard.perft(7), 178_633_661);
         }
 
         #[test]
         fn perft_test_04() {
             let fen = "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 0";
             let mut chessboard = Chessboard::from_fen(fen).unwrap();
-            assert_eq!(chessboard.perft(6), 706045033);
+            assert_eq!(chessboard.perft(6), 706_045_033);
         }
 
         #[test]
         fn perft_test_05() {
             let fen = "1k6/1b6/8/8/7R/8/8/4K2R b K - 0 1";
             let mut chessboard = Chessboard::from_fen(fen).unwrap();
-            assert_eq!(chessboard.perft(5), 1063513);
+            assert_eq!(chessboard.perft(5), 1_063_513);
         }
 
         #[test]
         fn perft_test_illegal_ep_1() {
             let fen = "3k4/3p4/8/K1P4r/8/8/8/8 b - - 0 1";
             let mut chessboard = Chessboard::from_fen(fen).unwrap();
-            assert_eq!(chessboard.perft(6), 1134888);
+            assert_eq!(chessboard.perft(6), 1_134_888);
         }
 
         #[test]
         fn perft_test_illegal_ep_2() {
             let fen = "8/8/4k3/8/2p5/8/B2P2K1/8 w - - 0 1";
             let mut chessboard = Chessboard::from_fen(fen).unwrap();
-            assert_eq!(chessboard.perft(6), 1015133);
+            assert_eq!(chessboard.perft(6), 1_015_133);
         }
 
         #[test]
         fn perft_test_ep_capture_checks() {
             let fen = "8/8/1k6/2b5/2pP4/8/5K2/8 b - d3 0 1";
             let mut chessboard = Chessboard::from_fen(fen).unwrap();
-            assert_eq!(chessboard.perft(6), 1015133);
+            assert_eq!(chessboard.perft(6), 1_015_133);
         }
 
         #[test]
         fn perft_test_short_castling_check() {
             let fen = "3k4/8/8/8/8/8/8/R3K3 w Q - 0 1";
             let mut chessboard = Chessboard::from_fen(fen).unwrap();
-            assert_eq!(chessboard.perft(6), 661072);
+            assert_eq!(chessboard.perft(6), 661_072);
         }
 
         #[test]
         fn perft_test_long_castling_check() {
             let fen = "3k4/8/8/8/8/8/8/R3K3 w Q - 0 1";
             let mut chessboard = Chessboard::from_fen(fen).unwrap();
-            assert_eq!(chessboard.perft(6), 803711);
+            assert_eq!(chessboard.perft(6), 803_711);
         }
 
         #[test]
         fn perft_test_castle_rights() {
             let fen = "r3k2r/1b4bq/8/8/8/8/7B/R3K2R w KQkq - 0 1";
             let mut chessboard = Chessboard::from_fen(fen).unwrap();
-            assert_eq!(chessboard.perft(4), 1274206);
+            assert_eq!(chessboard.perft(4), 1_274_206);
         }
 
         #[test]
         fn perft_test_prevented_castle_rights() {
             let fen = "r3k2r/8/3Q4/8/8/5q2/8/R3K2R b KQkq - 0 1";
             let mut chessboard = Chessboard::from_fen(fen).unwrap();
-            assert_eq!(chessboard.perft(4), 1720476);
+            assert_eq!(chessboard.perft(4), 1_720_476);
         }
 
         #[test]
         fn perft_test_promote_out_of_check() {
             let fen = "2K2r2/4P3/8/8/8/8/8/3k4 w - - 0 1";
             let mut chessboard = Chessboard::from_fen(fen).unwrap();
-            assert_eq!(chessboard.perft(6), 3821001);
+            assert_eq!(chessboard.perft(6), 3_821_001);
         }
 
         #[test]
         fn perft_test_discovered_check() {
             let fen = "8/8/1P2K3/8/2n5/1q6/8/5k2 b - - 0 1";
             let mut chessboard = Chessboard::from_fen(fen).unwrap();
-            assert_eq!(chessboard.perft(5), 1004658);
+            assert_eq!(chessboard.perft(5), 1_004_658);
         }
 
         #[test]
         fn perft_test_promote_to_give_check() {
             let fen = "4k3/1P6/8/8/8/8/K7/8 w - - 0 1";
             let mut chessboard = Chessboard::from_fen(fen).unwrap();
-            assert_eq!(chessboard.perft(6), 217342);
+            assert_eq!(chessboard.perft(6), 217_342);
         }
 
         #[test]
@@ -665,7 +667,7 @@ mod tests {
         fn perft_test_stalemate_and_checkmate_1() {
             let fen = "8/k1P5/8/1K6/8/8/8/8 w - - 0 1";
             let mut chessboard = Chessboard::from_fen(fen).unwrap();
-            assert_eq!(chessboard.perft(7), 567584);
+            assert_eq!(chessboard.perft(7), 567_584);
         }
 
         #[test]
@@ -689,62 +691,68 @@ mod tests {
         fn startpos() {
             let pb = PositionBitboards::new(&Position::from_str(FEN_STARTING_POSITION).unwrap());
 
-            assert_eq!(pb.occupied, Bitboard(0xFFFF00000000FFFF));
-            assert_eq!(pb.sides[Side::White as usize], Bitboard(0x000000000000FFFF));
-            assert_eq!(pb.sides[Side::Black as usize], Bitboard(0xFFFF000000000000));
+            assert_eq!(pb.occupied, Bitboard(0xFFFF_0000_0000_FFFF));
+            assert_eq!(
+                pb.sides[Side::White as usize],
+                Bitboard(0x0000_0000_0000_FFFF)
+            );
+            assert_eq!(
+                pb.sides[Side::Black as usize],
+                Bitboard(0xFFFF_0000_0000_0000)
+            );
 
             assert_eq!(
                 pb.pieces[Side::White as usize][PieceKind::Pawn as usize],
-                Bitboard(0x000000000000FF00)
+                Bitboard(0x0000_0000_0000_FF00)
             );
             assert_eq!(
                 pb.pieces[Side::Black as usize][PieceKind::Pawn as usize],
-                Bitboard(0x00FF000000000000)
+                Bitboard(0x00FF_0000_0000_0000)
             );
 
             assert_eq!(
                 pb.pieces[Side::White as usize][PieceKind::Rook as usize],
-                Bitboard(0x0000000000000081)
+                Bitboard(0x0000_0000_0000_0081)
             );
             assert_eq!(
                 pb.pieces[Side::Black as usize][PieceKind::Rook as usize],
-                Bitboard(0x8100000000000000)
+                Bitboard(0x8100_0000_0000_0000)
             );
 
             assert_eq!(
                 pb.pieces[Side::White as usize][PieceKind::Knight as usize],
-                Bitboard(0x0000000000000042)
+                Bitboard(0x0000_0000_0000_0042)
             );
             assert_eq!(
                 pb.pieces[Side::Black as usize][PieceKind::Knight as usize],
-                Bitboard(0x4200000000000000)
+                Bitboard(0x4200_0000_0000_0000)
             );
 
             assert_eq!(
                 pb.pieces[Side::White as usize][PieceKind::Bishop as usize],
-                Bitboard(0x0000000000000024)
+                Bitboard(0x0000_0000_0000_0024)
             );
             assert_eq!(
                 pb.pieces[Side::Black as usize][PieceKind::Bishop as usize],
-                Bitboard(0x2400000000000000)
+                Bitboard(0x2400_0000_0000_0000)
             );
 
             assert_eq!(
                 pb.pieces[Side::White as usize][PieceKind::Queen as usize],
-                Bitboard(0x0000000000000008)
+                Bitboard(0x0000_0000_0000_0008)
             );
             assert_eq!(
                 pb.pieces[Side::Black as usize][PieceKind::Queen as usize],
-                Bitboard(0x0800000000000000)
+                Bitboard(0x0800_0000_0000_0000)
             );
 
             assert_eq!(
                 pb.pieces[Side::White as usize][PieceKind::King as usize],
-                Bitboard(0x0000000000000010)
+                Bitboard(0x0000_0000_0000_0010)
             );
             assert_eq!(
                 pb.pieces[Side::Black as usize][PieceKind::King as usize],
-                Bitboard(0x1000000000000000)
+                Bitboard(0x1000_0000_0000_0000)
             );
         }
     }
