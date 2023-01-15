@@ -99,6 +99,7 @@ pub(crate) const SIDE_COUNT: usize = 2;
 
 /// Enum for the possible types of a chess piece.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[allow(clippy::module_name_repetitions)]
 pub enum PieceKind {
     /// The king piece.
     ///

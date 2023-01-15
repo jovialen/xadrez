@@ -142,6 +142,7 @@ impl Chessboard {
     ///
     /// Will return a [`MoveError`] if the given move cannot be made on the
     /// board.
+    #[allow(clippy::missing_panics_doc)]
     pub fn make_move(&mut self, m: Move) -> Result<(), MoveError> {
         // Check if move is legal
         let m = if let Some(legal) = self.legal_moves.iter().find(|&legal| legal == &m) {
@@ -175,7 +176,9 @@ impl Chessboard {
             MoveKind::EnPassant => {
                 assert!(to_move.kind == PieceKind::Pawn);
 
-                let capture_square = m.to.neighbour(to_move.side.backward()).unwrap();
+                let capture_square =
+                    m.to.neighbour(to_move.side.backward())
+                        .expect("Invalid en-passant target square");
                 self.position[capture_square] = None;
             }
             MoveKind::PawnPush => {

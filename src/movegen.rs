@@ -354,6 +354,7 @@ fn get_move_bitboard(kind: PieceKind, square: Square, occupied: Bitboard) -> Bit
     }
 }
 
+#[allow(clippy::cast_possible_wrap)]
 fn init_piece_moves() -> PieceMoveBitboards {
     let mut moves = [[Bitboard(0); BOARD_SIZE]; 5];
 
@@ -391,35 +392,42 @@ fn init_piece_moves() -> PieceMoveBitboards {
     moves
 }
 
+// TODO: Refactor this monstrosity
+#[allow(clippy::cast_possible_wrap)]
 fn init_pawn_moves() -> PawnMoveBitboards {
     let mut moves = [[(Bitboard(0), Bitboard(0)); BOARD_SIZE]; SIDE_COUNT];
 
     // Iterate through the entire board except the last rank.
     // Pawns get promoted on the last rank, so no pawn moves ever occur there.
-    for i in 0..(BOARD_SIZE - BOARD_FILES) {
+    for white_i in 0..(BOARD_SIZE - BOARD_FILES) {
         // Safety: 0..64 should always be in range.
-        let from = Square::try_from(i).unwrap();
+        let white_from = Square::try_from(white_i).unwrap();
 
         // The black pawns are calculated with the inverse of the white pawns
-        let bi = BOARD_SIZE - i - 1;
+        let black_i = BOARD_SIZE - white_i - 1;
+        let black_from = Square::try_from(black_i).unwrap();
 
-        moves[Side::White as usize][i].0.on(i + BOARD_FILES);
-        moves[Side::Black as usize][bi].0.on(bi - BOARD_FILES);
+        moves[Side::White as usize][white_i]
+            .0
+            .on(white_i + BOARD_FILES);
+        moves[Side::Black as usize][black_i]
+            .0
+            .on(black_i - BOARD_FILES);
 
         // Captures
         for offset in [9, 7] {
-            let dest_i = i as isize + offset;
-            let dest_bi = bi as isize - offset;
+            let white_dest_i = white_i as isize + offset;
+            let black_dest_i = black_i as isize - offset;
 
-            if let Ok(dest) = Square::try_from(dest_i) {
-                if from.distance(dest) <= 2.0 {
-                    moves[Side::White as usize][i].1.on(dest);
+            if let Ok(dest) = Square::try_from(white_dest_i) {
+                if white_from.distance(dest) <= 2.0 {
+                    moves[Side::White as usize][white_i].1.on(dest);
                 }
             }
 
-            if let Ok(dest) = Square::try_from(dest_bi) {
-                if from.distance(dest) <= 2.0 {
-                    moves[Side::Black as usize][i].1.on(dest);
+            if let Ok(dest) = Square::try_from(black_dest_i) {
+                if black_from.distance(dest) <= 2.0 {
+                    moves[Side::Black as usize][black_i].1.on(dest);
                 }
             }
         }
