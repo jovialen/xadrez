@@ -2,7 +2,7 @@
 //!
 //! Provides the structures used relating to the pieces on the chessboard.
 
-use crate::error::ParseFenError;
+use crate::{board::Direction, error::ParseFenError};
 use std::{fmt, ops};
 
 /// Constants for all the types of chess pieces.
@@ -165,6 +165,15 @@ impl fmt::Display for Piece {
         };
 
         write!(f, "{c}")
+    }
+}
+
+impl Side {
+    pub(crate) fn backward(self) -> Direction {
+        match self {
+            Self::White => Direction::South,
+            Self::Black => Direction::North,
+        }
     }
 }
 

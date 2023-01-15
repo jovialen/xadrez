@@ -286,7 +286,8 @@ fn generate_pawn_moves(
         let (moves, attacks) = PAWN_MOVES[friendly][pawn];
 
         let mut quiets = moves & !bitboards.occupied;
-        let mut captures = attacks & (bitboards.sides[hostile] | ep_square);
+        let mut captures = attacks & bitboards.sides[hostile];
+        let mut ep_capture = attacks & ep_square;
 
         while let Some(i) = quiets.pop_lsb() {
             // Safety: Always in range 0..64
@@ -298,6 +299,12 @@ fn generate_pawn_moves(
             // Safety: Always in range 0..64
             let to = Square::try_from(to).unwrap();
             dest.push(Move::new(from, to, MoveKind::Capture));
+        }
+
+        if let Some(to) = ep_capture.pop_lsb() {
+            // Safety: Always in range 0..64
+            let to = Square::try_from(to).unwrap();
+            dest.push(Move::new(from, to, MoveKind::EnPassant));
         }
     }
 
@@ -312,7 +319,7 @@ fn generate_pawn_moves(
         if !bitboards.occupied.get(jump) && !bitboards.occupied.get(to) {
             // Safety: Always in range 0..64
             let to = Square::try_from(to).unwrap();
-            dest.push(Move::new(from, to, MoveKind::EnPassant));
+            dest.push(Move::new(from, to, MoveKind::PawnPush));
         }
     }
 

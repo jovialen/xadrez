@@ -173,6 +173,12 @@ impl Chessboard {
         // Check for any special conditions with the move
         match m.kind {
             MoveKind::EnPassant => {
+                assert!(to_move.kind == PieceKind::Pawn);
+
+                let capture_square = m.to.neighbour(to_move.side.backward()).unwrap();
+                self.position[capture_square] = None;
+            }
+            MoveKind::PawnPush => {
                 // The index of the square that was jumped over in the pawn push will always be
                 // the sum of the indices of the to and from divided by two.
                 let ep_index = (m.from as usize + m.to as usize) / 2;
