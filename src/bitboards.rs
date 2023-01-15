@@ -1,6 +1,6 @@
 use std::{fmt, ops};
 
-pub(crate) mod bitboard_constants {
+pub(crate) mod constants {
     // Allow for completeness
     #![allow(unused)]
 
@@ -249,7 +249,7 @@ impl fmt::Debug for Bitboard {
 
 #[cfg(test)]
 mod tests {
-    use super::{bitboard_constants::BITBOARD_ALL, *};
+    use super::{constants::BITBOARD_ALL, *};
     use crate::board::Square;
 
     #[test]

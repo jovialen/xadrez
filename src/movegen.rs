@@ -1,6 +1,6 @@
 #[allow(clippy::wildcard_imports)]
 use crate::{
-    bitboards::{bitboard_constants::*, Bitboard},
+    bitboards::{constants::*, Bitboard},
     board::{Direction, Position, Square, BOARD_FILES, BOARD_SIZE},
     piece::{PieceKind, Side, PIECE_KIND_COUNT, SIDE_COUNT},
     r#move::{Move, MoveKind},

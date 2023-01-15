@@ -4,7 +4,7 @@
 
 #[allow(clippy::wildcard_imports)]
 use crate::{
-    bitboards::{bitboard_constants::*, Bitboard},
+    bitboards::{constants::*, Bitboard},
     error::{MoveError, ParseFenError},
     fen::{FenString, FEN_STARTING_POSITION},
     movegen,

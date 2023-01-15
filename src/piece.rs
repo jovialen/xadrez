@@ -6,7 +6,7 @@ use crate::{board::Direction, error::ParseFenError};
 use std::{fmt, ops};
 
 /// Constants for all the types of chess pieces.
-pub mod piece_constants {
+pub mod constants {
     #[allow(clippy::enum_glob_use)]
     use super::{Piece, PieceKind::*, Side::*};
 
