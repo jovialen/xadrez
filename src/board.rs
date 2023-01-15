@@ -223,6 +223,7 @@ impl Chessboard {
     /// # Arguments
     ///
     /// * `depth` - How many max moves to make. Must be at least 1.
+    #[allow(clippy::missing_panics_doc)]
     pub fn perft(&mut self, depth: usize) -> usize {
         if depth == 0 {
             return 1;
@@ -474,6 +475,7 @@ impl Square {
 
     /// Get the distance between two squares.
     #[must_use]
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
     pub fn distance(&self, rhs: Self) -> f64 {
         let (sr, sf) = self.to_rank_file();
         let (rr, rf) = rhs.to_rank_file();
@@ -567,7 +569,7 @@ impl FromStr for Square {
             .ok_or(ParseFenError::InvalidSquare)?
             - 1;
 
-        Square::from_rank_file(rank as u16, file)
+        Square::from_rank_file(rank as usize, file)
     }
 }
 
