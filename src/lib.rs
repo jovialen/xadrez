@@ -15,3 +15,11 @@ pub mod fen;
 pub mod r#move;
 mod movegen;
 pub mod piece;
+
+pub mod prelude {
+    pub use crate::{
+        board::{Chessboard, Square},
+        piece::{Piece, PieceKind, Side},
+        r#move::Move,
+    };
+}
