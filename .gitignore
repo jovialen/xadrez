@@ -1,2 +1,11 @@
+# Cargo build results
+
 /target
 /Cargo.lock
+
+# Debug data files
+
+*.data
+flamegraph.svg
+perf.svg
+*.t(e)mp
