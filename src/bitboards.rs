@@ -271,6 +271,7 @@ mod tests {
         assert_eq!(bitboard, Bitboard(0b1u64.rotate_right(1)));
     }
 
+    #[allow(clippy::bool_assert_comparison)]
     #[test]
     fn get_bits() {
         let bitboard = Bitboard(0b10_0010_0101);
