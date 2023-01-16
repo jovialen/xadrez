@@ -1,19 +1,26 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use std::time::Duration;
 use xadrez::board::Chessboard;
 
 fn perft_benchmark(c: &mut Criterion) {
     let mut board = Chessboard::default();
 
-    c.bench_function("perft 1", |b| b.iter(|| board.perft(black_box(1))));
-    c.bench_function("perft 2", |b| b.iter(|| board.perft(black_box(2))));
-    c.bench_function("perft 3", |b| b.iter(|| board.perft(black_box(3))));
-    c.bench_function("perft 4", |b| b.iter(|| board.perft(black_box(4))));
+    let mut low_depth = c.benchmark_group("perft-low-depth");
+    low_depth.bench_function("perft 1", |b| b.iter(|| board.perft(black_box(1))));
+    low_depth.bench_function("perft 2", |b| b.iter(|| board.perft(black_box(2))));
+    low_depth.finish();
 
-    let mut group = c.benchmark_group("perft-high-depth");
-    group.sample_size(10);
-    group.bench_function("perft 5", |b| b.iter(|| board.perft(black_box(5))));
-    group.bench_function("perft 6", |b| b.iter(|| board.perft(black_box(6))));
-    group.finish();
+    let mut mid_depth = c.benchmark_group("perft-mid-depth");
+    mid_depth.measurement_time(Duration::from_secs(10));
+    mid_depth.bench_function("perft 3", |b| b.iter(|| board.perft(black_box(3))));
+    mid_depth.bench_function("perft 4", |b| b.iter(|| board.perft(black_box(4))));
+    mid_depth.finish();
+
+    let mut high_depth = c.benchmark_group("perft-high-depth");
+    high_depth.sample_size(10);
+    high_depth.bench_function("perft 5", |b| b.iter(|| board.perft(black_box(5))));
+    high_depth.bench_function("perft 6", |b| b.iter(|| board.perft(black_box(6))));
+    high_depth.finish();
 }
 
 criterion_group!(benches, perft_benchmark);
