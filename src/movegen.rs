@@ -217,7 +217,7 @@ struct Magic {
 
 pub(crate) fn generate_legal_moves(position: &Position) -> Vec<Move> {
     let pb = PositionBitboards::new(position);
-    let mut result = Vec::new();
+    let mut result = Vec::with_capacity(150);
 
     if pb.checkers.pop_count() < 2 {
         generate_moves(PieceKind::Queen, &pb, position.side_to_move, &mut result);
