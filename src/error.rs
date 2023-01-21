@@ -20,7 +20,7 @@ pub enum ParseFenError {
     /// Either the rank or file of the square was out of bounds.
     InvalidSquare,
     /// No piece represented by the given char.
-    InvalidPiece(char),
+    InvalidPiece,
     /// Failed to parse either the fulltime or halftime clock.
     ParseClockError(ParseIntError),
     /// The input was empty.
@@ -65,7 +65,7 @@ impl fmt::Display for ParseFenError {
             Self::TrailingField => "there are one or more trailing fields in the FEN string",
             Self::InvalidBoardSize => "FEN position is formatted incorrectly",
             Self::InvalidSquare => "invalid square notation",
-            Self::InvalidPiece(_) => "unknown piece",
+            Self::InvalidPiece => "unknown piece",
             Self::ParseClockError(_) => "failed to parse clock field",
             Self::Empty => "empty FEN string",
         })

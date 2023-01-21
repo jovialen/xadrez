@@ -2,6 +2,8 @@
 //!
 //! Provides the structures used relating to the pieces on the chessboard.
 
+use num_derive::FromPrimitive;
+
 use crate::{board::Direction, error::ParseFenError};
 use std::{fmt, ops};
 
@@ -98,7 +100,7 @@ pub enum Side {
 pub(crate) const SIDE_COUNT: usize = 2;
 
 /// Enum for the possible types of a chess piece.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, FromPrimitive)]
 #[allow(clippy::module_name_repetitions)]
 pub enum PieceKind {
     /// The king piece.
@@ -212,6 +214,22 @@ impl fmt::Display for Side {
     }
 }
 
+impl TryFrom<usize> for PieceKind {
+    type Error = ParseFenError;
+
+    fn try_from(value: usize) -> Result<Self, Self::Error> {
+        num::FromPrimitive::from_usize(value).ok_or(ParseFenError::InvalidPiece)
+    }
+}
+
+impl TryFrom<isize> for PieceKind {
+    type Error = ParseFenError;
+
+    fn try_from(value: isize) -> Result<Self, Self::Error> {
+        num::FromPrimitive::from_isize(value).ok_or(ParseFenError::InvalidPiece)
+    }
+}
+
 impl TryFrom<char> for PieceKind {
     type Error = ParseFenError;
 
@@ -223,7 +241,7 @@ impl TryFrom<char> for PieceKind {
             'N' | 'n' => Ok(PieceKind::Knight),
             'R' | 'r' => Ok(PieceKind::Rook),
             'P' | 'p' => Ok(PieceKind::Pawn),
-            _ => Err(ParseFenError::InvalidPiece(value)),
+            _ => Err(ParseFenError::InvalidPiece),
         }
     }
 }

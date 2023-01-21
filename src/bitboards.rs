@@ -85,6 +85,16 @@ impl Bitboard {
         self.off(lsb);
         Some(lsb)
     }
+
+    pub fn pop_count(self) -> usize {
+        self.0.count_ones() as usize
+    }
+}
+
+impl PartialEq<u64> for Bitboard {
+    fn eq(&self, other: &u64) -> bool {
+        self.0 == *other
+    }
 }
 
 impl ops::Not for Bitboard {
@@ -241,6 +251,24 @@ impl ops::DivAssign for Bitboard {
     }
 }
 
+impl fmt::Display for Bitboard {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let bytes = self.0.to_be_bytes();
+        for byte in bytes {
+            writeln!(
+                f,
+                "{}",
+                format!("{byte:#010b}")
+                    .chars()
+                    .rev()
+                    .take(8)
+                    .collect::<String>()
+            )?;
+        }
+        Ok(())
+    }
+}
+
 impl fmt::Debug for Bitboard {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Bitboard({:#b})", self.0)
@@ -272,6 +300,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::bool_assert_comparison)]
     fn get_bits() {
         let bitboard = Bitboard(0b10_0010_0101);
 

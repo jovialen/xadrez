@@ -15,7 +15,7 @@ type PieceMoveBitboards = [[Bitboard; BOARD_SIZE]; PIECE_KIND_COUNT - 1];
 type PawnMoveBitboards = [[(Bitboard, Bitboard); BOARD_SIZE]; SIDE_COUNT];
 
 lazy_static! {
-    static ref PIECE_MOVES: PieceMoveBitboards = init_piece_moves();
+    static ref PSEUDO_ATTACKS: PieceMoveBitboards = init_pseudo_attacks();
     static ref PAWN_MOVES: PawnMoveBitboards = init_pawn_moves();
     static ref BISHOP_MOVES: MagicTable<512> =
         MagicTable::new(&BISHOP_DIRECTIONS, &BISHOP_MAGICS, &BISHOP_BITS);
@@ -193,6 +193,11 @@ struct PositionBitboards {
     pieces: [[Bitboard; PIECE_KIND_COUNT]; SIDE_COUNT],
     sides: [Bitboard; SIDE_COUNT],
     occupied: Bitboard,
+
+    checkmask: Bitboard,
+    checkers: Bitboard,
+    attacks: Bitboard,
+    king_danger_squares: Bitboard,
 }
 
 // This project uses the fancy magics approach to find sliding moves. It's the
@@ -212,16 +217,31 @@ struct Magic {
 
 pub(crate) fn generate_legal_moves(position: &Position) -> Vec<Move> {
     let pb = PositionBitboards::new(position);
-    let mut moves = Vec::new();
+    let mut result = Vec::new();
 
-    generate_moves(PieceKind::King, &pb, position.side_to_move, &mut moves);
-    generate_moves(PieceKind::Queen, &pb, position.side_to_move, &mut moves);
-    generate_moves(PieceKind::Bishop, &pb, position.side_to_move, &mut moves);
-    generate_moves(PieceKind::Knight, &pb, position.side_to_move, &mut moves);
-    generate_moves(PieceKind::Rook, &pb, position.side_to_move, &mut moves);
-    generate_pawn_moves(&pb, position.side_to_move, position.en_passant, &mut moves);
+    if pb.checkers.pop_count() < 2 {
+        generate_moves(PieceKind::Queen, &pb, position.side_to_move, &mut result);
+        generate_moves(PieceKind::Bishop, &pb, position.side_to_move, &mut result);
+        generate_moves(PieceKind::Knight, &pb, position.side_to_move, &mut result);
+        generate_moves(PieceKind::Rook, &pb, position.side_to_move, &mut result);
+        generate_pawn_moves(&pb, position.side_to_move, position.en_passant, &mut result);
+    }
 
-    moves
+    let mut kings = pb.pieces[position.side_to_move as usize][PieceKind::King as usize];
+    while let Some(square) = kings.pop_lsb() {
+        // Safety: Always in range 0..64
+        let from = Square::try_from(square).unwrap();
+        let moves = get_attacks_bitboard(PieceKind::King, position.side_to_move, from, pb.occupied)
+            & !pb.king_danger_squares;
+
+        let quiets = moves & !pb.occupied;
+        let captures = moves & pb.sides[!position.side_to_move as usize];
+
+        push_moves(MoveKind::Quiet, quiets, from, &mut result);
+        push_moves(MoveKind::Capture, captures, from, &mut result);
+    }
+
+    result
 }
 
 fn generate_moves(
@@ -238,22 +258,14 @@ fn generate_moves(
     while let Some(square) = pieces.pop_lsb() {
         // Safety: Always in range 0..64
         let from = Square::try_from(square).unwrap();
-        let moves = get_move_bitboard(kind, from, bitboards.occupied);
+        let pseudo_attacks = get_attacks_bitboard(kind, side, from, bitboards.occupied);
+        let moves = pseudo_attacks & bitboards.checkmask;
 
-        let mut quiets = moves & !bitboards.occupied;
-        let mut captures = moves & bitboards.sides[hostile];
+        let quiets = moves & !bitboards.occupied;
+        let captures = moves & bitboards.sides[hostile];
 
-        while let Some(to) = quiets.pop_lsb() {
-            // Safety: Always in range 0..64
-            let to = Square::try_from(to).unwrap();
-            dest.push(Move::new(from, to, MoveKind::Quiet));
-        }
-
-        while let Some(to) = captures.pop_lsb() {
-            // Safety: Always in range 0..64
-            let to = Square::try_from(to).unwrap();
-            dest.push(Move::new(from, to, MoveKind::Capture));
-        }
+        push_moves(MoveKind::Quiet, quiets, from, dest);
+        push_moves(MoveKind::Capture, captures, from, dest);
     }
 }
 
@@ -285,27 +297,13 @@ fn generate_pawn_moves(
         let from = Square::try_from(pawn).unwrap();
         let (moves, attacks) = PAWN_MOVES[friendly][pawn];
 
-        let mut quiets = moves & !bitboards.occupied;
-        let mut captures = attacks & bitboards.sides[hostile];
-        let mut ep_capture = attacks & ep_square;
+        let quiets = moves & !bitboards.occupied & bitboards.checkmask;
+        let captures = attacks & bitboards.sides[hostile] & bitboards.checkmask;
+        let ep_capture = attacks & ep_square & bitboards.checkmask;
 
-        while let Some(i) = quiets.pop_lsb() {
-            // Safety: Always in range 0..64
-            let to = Square::try_from(i).unwrap();
-            dest.push(Move::new(from, to, MoveKind::Quiet));
-        }
-
-        while let Some(to) = captures.pop_lsb() {
-            // Safety: Always in range 0..64
-            let to = Square::try_from(to).unwrap();
-            dest.push(Move::new(from, to, MoveKind::Capture));
-        }
-
-        if let Some(to) = ep_capture.pop_lsb() {
-            // Safety: Always in range 0..64
-            let to = Square::try_from(to).unwrap();
-            dest.push(Move::new(from, to, MoveKind::EnPassant));
-        }
+        push_moves(MoveKind::Quiet, quiets, from, dest);
+        push_moves(MoveKind::Capture, captures, from, dest);
+        push_moves(MoveKind::EnPassant, ep_capture, from, dest);
     }
 
     while let Some(doubles) = doubles.pop_lsb() {
@@ -316,7 +314,10 @@ fn generate_pawn_moves(
         let jump = PAWN_MOVES[friendly][doubles].0.lsb().unwrap();
         let to = PAWN_MOVES[friendly][jump].0.lsb().unwrap();
 
-        if !bitboards.occupied.get(jump) && !bitboards.occupied.get(to) {
+        if !bitboards.occupied.get(jump)
+            && !bitboards.occupied.get(to)
+            && Bitboard(0b1 << to) & bitboards.checkmask != 0
+        {
             // Safety: Always in range 0..64
             let to = Square::try_from(to).unwrap();
             dest.push(Move::new(from, to, MoveKind::PawnPush));
@@ -330,7 +331,7 @@ fn generate_pawn_moves(
 
         let quiets = moves & !bitboards.occupied;
         let captures = attacks & bitboards.sides[hostile];
-        let mut all = quiets | captures;
+        let mut all = (quiets | captures) & bitboards.checkmask;
 
         while let Some(to) = all.pop_lsb() {
             // Safety: Always in range 0..64
@@ -344,18 +345,31 @@ fn generate_pawn_moves(
     }
 }
 
-fn get_move_bitboard(kind: PieceKind, square: Square, occupied: Bitboard) -> Bitboard {
+fn get_attacks_bitboard(
+    kind: PieceKind,
+    side: Side,
+    square: Square,
+    occupied: Bitboard,
+) -> Bitboard {
     match kind {
         PieceKind::Bishop => BISHOP_MOVES.get(square, occupied),
         PieceKind::Rook => ROOK_MOVES.get(square, occupied),
         PieceKind::Queen => BISHOP_MOVES.get(square, occupied) | ROOK_MOVES.get(square, occupied),
-        PieceKind::Pawn => unreachable!("Pawn moves should be calculated with dedicated function."),
-        _ => PIECE_MOVES[kind as usize][square as usize],
+        PieceKind::Pawn => PAWN_MOVES[side as usize][square as usize].1,
+        _ => PSEUDO_ATTACKS[kind as usize][square as usize],
+    }
+}
+
+fn push_moves(kind: MoveKind, mut bb: Bitboard, from: Square, dest: &mut Vec<Move>) {
+    while let Some(square) = bb.pop_lsb() {
+        // Safety: Always in range 0..64
+        let to = Square::try_from(square).unwrap();
+        dest.push(Move::new(from, to, kind));
     }
 }
 
 #[allow(clippy::cast_possible_wrap)]
-fn init_piece_moves() -> PieceMoveBitboards {
+fn init_pseudo_attacks() -> PieceMoveBitboards {
     let mut moves = [[Bitboard(0); BOARD_SIZE]; 5];
 
     for i in 0..64 {
@@ -471,11 +485,61 @@ impl PositionBitboards {
     fn new(position: &Position) -> Self {
         let mut pb = Self::default();
 
+        let friendly = position.side_to_move as usize;
+        let hostile = !position.side_to_move as usize;
+
+        let king_square = position
+            .pieces()
+            .iter()
+            .find(|(piece, _)| piece.kind == PieceKind::King && piece.side == position.side_to_move)
+            .expect("There must be a king on the board to generate legal moves")
+            .1;
+
         for (piece, square) in position.pieces() {
             pb.pieces[piece.side as usize][piece.kind as usize].on(square);
             pb.sides[piece.side as usize].on(square);
             pb.occupied.on(square);
         }
+
+        for (i, mut pieces) in pb.pieces[hostile].into_iter().enumerate() {
+            let kind = PieceKind::try_from(i).unwrap();
+
+            while let Some(piece) = pieces.pop_lsb() {
+                let from = Square::try_from(piece).unwrap();
+
+                pb.attacks |= get_attacks_bitboard(kind, !position.side_to_move, from, pb.occupied)
+                    & !pb.sides[hostile];
+
+                pb.king_danger_squares |= get_attacks_bitboard(
+                    kind,
+                    !position.side_to_move,
+                    from,
+                    pb.occupied & !pb.pieces[friendly][PieceKind::King as usize],
+                );
+            }
+        }
+
+        let in_check = pb.pieces[friendly][PieceKind::King as usize] & pb.attacks != 0;
+        if in_check {
+            for (i, mut pieces) in pb.pieces[hostile].into_iter().enumerate() {
+                let kind = PieceKind::try_from(i).unwrap();
+                let from_king_square =
+                    get_attacks_bitboard(kind, position.side_to_move, king_square, pb.occupied);
+
+                pieces &= from_king_square;
+                pb.checkers |= pieces;
+                pb.checkmask |= pieces;
+
+                while let Some(piece) = pieces.pop_lsb() {
+                    let from = Square::try_from(piece).unwrap();
+                    pb.checkmask |=
+                        get_attacks_bitboard(kind, !position.side_to_move, from, pb.occupied)
+                            & from_king_square;
+                }
+            }
+        } else {
+            pb.checkmask = BITBOARD_ALL;
+        };
 
         pb
     }

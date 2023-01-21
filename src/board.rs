@@ -184,11 +184,15 @@ impl Chessboard {
             MoveKind::PawnPush => {
                 // The index of the square that was jumped over in the pawn push will always be
                 // the sum of the indices of the to and from divided by two.
+                assert!(to_move.kind == PieceKind::Pawn);
+
                 let ep_index = (m.from as usize + m.to as usize) / 2;
                 self.position.en_passant = Some(Square::try_from(ep_index).unwrap());
             }
             MoveKind::Capture => self.position.halftime = 0,
             MoveKind::Promotion(into) => {
+                assert!(to_move.kind == PieceKind::Pawn);
+
                 if let Some(ref mut piece) = self.position[m.to] {
                     piece.kind = into;
                 }
