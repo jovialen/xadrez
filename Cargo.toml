@@ -2,6 +2,10 @@
 name = "xadrez"
 version = "0.1.0"
 edition = "2021"
+description = "A chess engine written in Rust."
+repository = "https://github.com/jovialen/xadrez"
+license-file = "LICENSE"
+readme = "README.md"
 
 [dependencies]
 num = "0.4"
