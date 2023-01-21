@@ -6,6 +6,7 @@
 # Debug data files
 
 *.data
+*.data.old
 flamegraph.svg
 perf.svg
 *.t(e)mp
