@@ -20,6 +20,7 @@ fn perft_benchmark(c: &mut Criterion) {
     high_depth.sample_size(10);
     high_depth.bench_function("perft 5", |b| b.iter(|| board.perft(black_box(5))));
     high_depth.bench_function("perft 6", |b| b.iter(|| board.perft(black_box(6))));
+    high_depth.bench_function("perft 7", |b| b.iter(|| board.perft(black_box(7))));
     high_depth.finish();
 }
 
