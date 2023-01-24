@@ -299,7 +299,6 @@ fn generate_pawn_moves(
 ) {
     const PAWN: usize = PieceKind::Pawn as usize;
     const PROMOTION_RANK: [Bitboard; SIDE_COUNT] = [BITBOARD_RANK_7, BITBOARD_RANK_2];
-    const DOUBLE_RANK: [Bitboard; SIDE_COUNT] = [BITBOARD_RANK_2, BITBOARD_RANK_7];
 
     let friendly = side as usize;
     let hostile = !side as usize;
@@ -310,59 +309,44 @@ fn generate_pawn_moves(
         0
     });
 
-    let mut doubles = bitboards.pieces[friendly][PAWN] & DOUBLE_RANK[friendly];
-    let mut promotions = bitboards.pieces[friendly][PAWN] & PROMOTION_RANK[friendly];
-    let mut normal = bitboards.pieces[friendly][PAWN] & !promotions;
+    let mut pawns = bitboards.pieces[friendly][PAWN];
+    let mut promotions = pawns & PROMOTION_RANK[friendly];
+    let mut pinned_hv = pawns & bitboards.pinmask_hv;
+    let mut pinned_d12 = pawns & bitboards.pinmask_d12;
 
-    while let Some(pawn) = normal.pop_lsb() {
+    while let Some(pawn) = pawns.pop_lsb() {
         // Safety: Always in range 0..64
         let from = Square::try_from(pawn).unwrap();
+
+        let promoting = Some(pawn) == promotions.lsb();
+        let is_pinned_hv = Some(pawn) == pinned_hv.lsb();
+        let is_pinned_d12 = Some(pawn) == pinned_d12.lsb();
+
         let (moves, attacks) = PAWN_MOVES[friendly][pawn];
+        let mut quiets = moves & !bitboards.occupied & bitboards.checkmask;
+        let mut captures = attacks & bitboards.sides[hostile] & bitboards.checkmask;
+        let mut ep_capture = attacks & ep_square & bitboards.checkmask;
 
-        let quiets = moves & !bitboards.occupied & bitboards.checkmask;
-        let captures = attacks & bitboards.sides[hostile] & bitboards.checkmask;
-        let ep_capture = attacks & ep_square & bitboards.checkmask;
-
-        push_moves(MoveKind::Quiet, quiets, from, dest);
-        push_moves(MoveKind::Capture, captures, from, dest);
-        push_moves(MoveKind::EnPassant, ep_capture, from, dest);
-    }
-
-    while let Some(doubles) = doubles.pop_lsb() {
-        // Safety: Always in range 0..64
-        let from = Square::try_from(doubles).unwrap();
-
-        // Safety: There is always one bit set in the moves bitboard.
-        let jump = PAWN_MOVES[friendly][doubles].0.lsb().unwrap();
-        let to = PAWN_MOVES[friendly][jump].0.lsb().unwrap();
-
-        if !bitboards.occupied.get(jump)
-            && !bitboards.occupied.get(to)
-            && Bitboard(0b1 << to) & bitboards.checkmask != 0
-        {
-            // Safety: Always in range 0..64
-            let to = Square::try_from(to).unwrap();
-            dest.push(Move::new(from, to, MoveKind::PawnPush));
+        if is_pinned_hv {
+            quiets &= bitboards.pinmask_hv;
+            captures &= bitboards.pinmask_hv;
+            ep_capture &= bitboards.pinmask_hv;
+            pinned_hv.pop_lsb();
+        } else if is_pinned_d12 {
+            quiets &= bitboards.pinmask_d12;
+            captures &= bitboards.pinmask_d12;
+            ep_capture &= bitboards.pinmask_d12;
+            pinned_d12.pop_lsb();
         }
-    }
 
-    while let Some(pawn) = promotions.pop_lsb() {
-        // Safety: Always in range 0..64
-        let from = Square::try_from(pawn).unwrap();
-        let (moves, attacks) = PAWN_MOVES[friendly][pawn];
-
-        let quiets = moves & !bitboards.occupied;
-        let captures = attacks & bitboards.sides[hostile];
-        let mut all = (quiets | captures) & bitboards.checkmask;
-
-        while let Some(to) = all.pop_lsb() {
-            // Safety: Always in range 0..64
-            let to = Square::try_from(to).unwrap();
-
-            dest.push(Move::new(from, to, MoveKind::Promotion(PieceKind::Queen)));
-            dest.push(Move::new(from, to, MoveKind::Promotion(PieceKind::Bishop)));
-            dest.push(Move::new(from, to, MoveKind::Promotion(PieceKind::Rook)));
-            dest.push(Move::new(from, to, MoveKind::Promotion(PieceKind::Knight)));
+        if promoting {
+            let all = quiets | captures;
+            push_promotions(all, from, dest);
+            promotions.pop_lsb();
+        } else {
+            push_moves(MoveKind::Quiet, quiets, from, dest);
+            push_moves(MoveKind::Capture, captures, from, dest);
+            push_moves(MoveKind::EnPassant, ep_capture, from, dest);
         }
     }
 }
@@ -379,6 +363,18 @@ fn get_attacks_bitboard(
         PieceKind::Queen => BISHOP_MOVES.get(square, occupied) | ROOK_MOVES.get(square, occupied),
         PieceKind::Pawn => PAWN_MOVES[side as usize][square as usize].1,
         _ => PSEUDO_ATTACKS[kind as usize][square as usize],
+    }
+}
+
+fn push_promotions(mut bb: Bitboard, from: Square, dest: &mut Vec<Move>) {
+    while let Some(square) = bb.pop_lsb() {
+        // Safety: Always in range 0..64
+        let to = Square::try_from(square).unwrap();
+
+        dest.push(Move::new(from, to, MoveKind::Promotion(PieceKind::Queen)));
+        dest.push(Move::new(from, to, MoveKind::Promotion(PieceKind::Bishop)));
+        dest.push(Move::new(from, to, MoveKind::Promotion(PieceKind::Rook)));
+        dest.push(Move::new(from, to, MoveKind::Promotion(PieceKind::Knight)));
     }
 }
 
@@ -431,6 +427,8 @@ fn init_pseudo_attacks() -> PieceMoveBitboards {
 // TODO: Refactor this monstrosity
 #[allow(clippy::cast_possible_wrap)]
 fn init_pawn_moves() -> PawnMoveBitboards {
+    const DOUBLE_RANK: [Bitboard; SIDE_COUNT] = [BITBOARD_RANK_2, BITBOARD_RANK_7];
+
     let mut moves = [[(Bitboard(0), Bitboard(0)); BOARD_SIZE]; SIDE_COUNT];
 
     // Iterate through the entire board except the last rank.
@@ -449,6 +447,17 @@ fn init_pawn_moves() -> PawnMoveBitboards {
         moves[Side::Black as usize][black_i]
             .0
             .on(black_i - BOARD_FILES);
+
+        if Bitboard(0b1 << white_i) & DOUBLE_RANK[Side::White as usize] != 0 {
+            moves[Side::White as usize][white_i]
+                .0
+                .on(white_i + BOARD_FILES * 2);
+        }
+        if Bitboard(0b1 << black_i) & DOUBLE_RANK[Side::Black as usize] != 0 {
+            moves[Side::Black as usize][black_i]
+                .0
+                .on(black_i - BOARD_FILES * 2);
+        }
 
         // Captures
         for offset in [9, 7] {
@@ -504,6 +513,7 @@ fn set_occupancy(index: u64, bitcount: usize, mut mask: Bitboard) -> Bitboard {
 }
 
 impl PositionBitboards {
+    // TODO: Refactor whatever this is
     fn new(position: &Position) -> Self {
         let mut pb = Self::default();
 

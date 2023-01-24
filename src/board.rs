@@ -181,14 +181,6 @@ impl Chessboard {
                         .expect("Invalid en-passant target square");
                 self.position[capture_square] = None;
             }
-            MoveKind::PawnPush => {
-                // The index of the square that was jumped over in the pawn push will always be
-                // the sum of the indices of the to and from divided by two.
-                assert!(to_move.kind == PieceKind::Pawn);
-
-                let ep_index = (m.from as usize + m.to as usize) / 2;
-                self.position.en_passant = Some(Square::try_from(ep_index).unwrap());
-            }
             MoveKind::Capture => self.position.halftime = 0,
             MoveKind::Promotion(into) => {
                 assert!(to_move.kind == PieceKind::Pawn);
@@ -203,6 +195,12 @@ impl Chessboard {
 
         if to_move.kind == PieceKind::Pawn {
             self.position.halftime = 0;
+
+            let ep_distance = 2.0;
+            if m.from.distance(m.to) >= ep_distance {
+                let ep_index = (m.from as usize + m.to as usize) / 2;
+                self.position.en_passant = Some(Square::try_from(ep_index).unwrap());
+            }
         }
 
         // Update legal moves

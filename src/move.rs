@@ -26,9 +26,6 @@ pub(crate) enum MoveKind {
     Quiet,
     Capture,
     EnPassant,
-    // Tecnically, a pawn push is any move where the pawn moves forward. Here, it is used
-    // for when the pawn makes the initial double push as its first move.
-    PawnPush,
     Promotion(PieceKind),
 }
 
@@ -197,7 +194,6 @@ mod tests {
             assert_eq!(Move::new(A1, A2, Any), Move::new(A1, A2, Any));
             assert_eq!(Move::new(A1, A2, Any), Move::new(A1, A2, Quiet));
             assert_eq!(Move::new(A1, A2, Any), Move::new(A1, A2, Capture));
-            assert_eq!(Move::new(A1, A2, Any), Move::new(A1, A2, PawnPush));
             assert_eq!(Move::new(A1, A2, Any), Move::new(A1, A2, EnPassant));
 
             assert_ne!(Move::new(A1, A2, Any), Move::new(A1, A2, Promotion(Queen)));
@@ -207,7 +203,6 @@ mod tests {
 
             assert_eq!(Move::new(A1, A2, Quiet), Move::new(A1, A2, Any));
             assert_eq!(Move::new(A1, A2, Capture), Move::new(A1, A2, Any));
-            assert_eq!(Move::new(A1, A2, PawnPush), Move::new(A1, A2, Any));
             assert_eq!(Move::new(A1, A2, EnPassant), Move::new(A1, A2, Any));
 
             assert_ne!(Move::new(A1, A2, Promotion(Queen)), Move::new(A1, A2, Any));
