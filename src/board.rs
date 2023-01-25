@@ -225,8 +225,9 @@ impl Chessboard {
     /// # Arguments
     ///
     /// * `depth` - How many max moves to make. Must be at least 1.
+    /// * `print` - If the nodes for each node should be printed.
     #[allow(clippy::missing_panics_doc)]
-    pub fn perft(&mut self, depth: usize) -> usize {
+    pub fn perft(&mut self, depth: usize, print: bool) -> usize {
         if depth == 0 {
             return 1;
         }
@@ -242,8 +243,13 @@ impl Chessboard {
         for m in moves {
             // Safety: All moves should be legal
             self.make_move(m).unwrap();
-            nodes += self.perft(depth - 1);
+            let count = self.perft(depth - 1, false);
+            nodes += count;
             self.undo();
+
+            if print {
+                println!("{m}: {count}");
+            }
         }
 
         nodes

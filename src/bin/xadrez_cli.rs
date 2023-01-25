@@ -63,7 +63,7 @@ fn perft<'a, I: Iterator<Item = &'a str>>(board: &mut Chessboard, mut args: I) {
         .next()
         .and_then(|s| s.parse::<usize>().ok())
         .unwrap_or(4);
-    println!("Perft result: {}", board.perft(depth));
+    println!("\nNodes searched: {}", board.perft(depth, true));
 }
 
 fn print_moves<'a, I: Iterator<Item = &'a str>>(board: &Chessboard, mut args: I) {
