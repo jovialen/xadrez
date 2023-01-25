@@ -234,7 +234,7 @@ impl Chessboard {
 
         let moves = self.moves().clone();
 
-        if depth == 1 {
+        if depth == 1 && !print {
             return moves.len();
         }
 
