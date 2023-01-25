@@ -339,6 +339,37 @@ fn generate_pawn_moves(
             pinned_d12.pop_lsb();
         }
 
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
+        if let Some(ep) = ep_capture.lsb() {
+            // If an en passant is possible, check that
+            // it doesn't reveal a check
+            let ep_pawn = (ep as isize + side.backward().offset()) as usize;
+
+            let mut occupied = bitboards.occupied;
+            occupied.off(ep_pawn);
+            occupied.off(pawn);
+
+            let king = Square::try_from(
+                bitboards.pieces[friendly][PieceKind::King as usize]
+                    .lsb()
+                    .unwrap(),
+            )
+            .unwrap();
+
+            let hostile_queens = bitboards.pieces[hostile][PieceKind::Queen as usize];
+            let hostile_bishops = bitboards.pieces[hostile][PieceKind::Bishop as usize];
+            let hostile_rooks = bitboards.pieces[hostile][PieceKind::Rook as usize];
+
+            let bishop_moves = BISHOP_MOVES.get(king, occupied);
+            let rook_moves = ROOK_MOVES.get(king, occupied);
+
+            if bishop_moves & (hostile_queens | hostile_bishops) != 0
+                || rook_moves & (hostile_queens | hostile_rooks) != 0
+            {
+                ep_capture &= 0;
+            }
+        }
+
         if promoting {
             let all = quiets | captures;
             push_promotions(all, from, dest);

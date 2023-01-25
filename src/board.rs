@@ -583,7 +583,7 @@ impl fmt::Display for Square {
 
 impl Direction {
     #[allow(clippy::cast_possible_wrap)]
-    fn offset(self) -> isize {
+    pub(crate) fn offset(self) -> isize {
         match self {
             Self::North => BOARD_FILES as isize,
             Self::East => 1,
