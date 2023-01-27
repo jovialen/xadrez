@@ -22,7 +22,7 @@ fn main() {
 	let moves: Vec<Move> = chessboard.moves();
 	let pieces: Vec<(Piece, Square)> = chessboard.pieces();
 
-	chessboard.make_move(moves[1])
+	chessboard.make_move(moves[1]);
 
 	let fen = chessboard.to_string();
 
