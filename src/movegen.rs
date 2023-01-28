@@ -871,7 +871,7 @@ mod tests {
         fn perft_test_ep_capture_checks() {
             let fen = "8/8/1k6/2b5/2pP4/8/5K2/8 b - d3 0 1";
             let mut chessboard = Chessboard::from_fen(fen).unwrap();
-            assert_eq!(chessboard.perft(6, false), 1_015_133);
+            assert_eq!(chessboard.perft(6, false), 1_440_467);
         }
 
         #[test]
