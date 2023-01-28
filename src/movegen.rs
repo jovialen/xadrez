@@ -397,12 +397,12 @@ fn generate_king_moves(
                 [[Square::G1, Square::C1], [Square::G8, Square::C8]];
             const BLACK_OFFSET: usize = (BOARD_RANKS - 1) * BOARD_FILES;
             const REQUIRED_CLEARING: [[u64; 2]; SIDE_COUNT] = [
-                [0b01100000, 0b00001110],
-                [0b01100000 << BLACK_OFFSET, 0b00001110 << BLACK_OFFSET],
+                [0b0110_0000, 0b0000_1110],
+                [0b0110_0000 << BLACK_OFFSET, 0b0000_1110 << BLACK_OFFSET],
             ];
             const REQUIRED_CONTROL: [[u64; 2]; SIDE_COUNT] = [
-                [0b01100000, 0b00001100],
-                [0b01100000 << BLACK_OFFSET, 0b00001100 << BLACK_OFFSET],
+                [0b0110_0000, 0b0000_1100],
+                [0b0110_0000 << BLACK_OFFSET, 0b0000_1100 << BLACK_OFFSET],
             ];
 
             for i in 0..2 {

@@ -216,9 +216,10 @@ impl Chessboard {
         }
 
         if to_move.kind == PieceKind::Pawn {
+            const EP_DISTANCE: f64 = 2.0;
+
             self.position.halftime = 0;
 
-            const EP_DISTANCE: f64 = 2.0;
             if m.from.distance(m.to) >= EP_DISTANCE {
                 let ep_index = (m.from as usize + m.to as usize) / 2;
                 self.position.en_passant = Some(Square::try_from(ep_index).unwrap());
@@ -228,18 +229,20 @@ impl Chessboard {
         }
 
         // Update castling
-        if self.position.castling[friendly][0] {}
+        #[allow(clippy::needless_range_loop)]
         for side in 0..SIDE_COUNT {
+            let rook = Piece::new(
+                match side {
+                    0 => Side::White,
+                    1 => Side::Black,
+                    _ => unreachable!(),
+                },
+                PieceKind::Rook,
+            );
+
             for i in 0..2 {
-                self.position.castling[side][i] &= self.position[ROOK_SOURCES[side][i]]
-                    == Some(Piece::new(
-                        match side {
-                            0 => Side::White,
-                            1 => Side::Black,
-                            _ => unreachable!(),
-                        },
-                        PieceKind::Rook,
-                    ));
+                self.position.castling[side][i] &=
+                    self.position[ROOK_SOURCES[side][i]] == Some(rook);
             }
         }
 
