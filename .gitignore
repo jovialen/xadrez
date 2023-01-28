@@ -9,4 +9,5 @@
 *.data.old
 flamegraph.svg
 perf.svg
-*.t(e)mp
+*.tmp
+*.temp
