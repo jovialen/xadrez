@@ -313,7 +313,7 @@ fn generate_pawn_moves(
 
         let mut quiets = moves & !bitboards.occupied & bitboards.checkmask;
         let mut captures = attacks & bitboards.sides[hostile] & bitboards.checkmask;
-        let mut ep_capture = attacks & ep_square & bitboards.checkmask;
+        let mut ep_capture = attacks & ep_square;
 
         if is_pinned_hv {
             quiets &= bitboards.pinmask_hv;
@@ -349,7 +349,7 @@ fn generate_pawn_moves(
             let hostile_rooks = bitboards.pieces[hostile][PieceKind::Rook as usize];
 
             let bishop_moves = BISHOP_MOVES.get(king, occupied);
-            let rook_moves = ROOK_MOVES.get(king, occupied);
+            let rook_moves = ROOK_MOVES.get(king, occupied) & king.rank();
 
             if bishop_moves & (hostile_queens | hostile_bishops) != 0
                 || rook_moves & (hostile_queens | hostile_rooks) != 0
