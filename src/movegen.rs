@@ -322,7 +322,9 @@ fn generate_pawn_moves(
         let is_pinned_hv = Some(pawn) == pinned_hv.lsb();
         let is_pinned_d12 = Some(pawn) == pinned_d12.lsb();
 
-        let (moves, attacks) = PAWN_MOVES[friendly][pawn];
+        let (mut moves, attacks) = PAWN_MOVES[friendly][pawn];
+        moves &= ROOK_MOVES.get(from, bitboards.occupied);
+
         let mut quiets = moves & !bitboards.occupied & bitboards.checkmask;
         let mut captures = attacks & bitboards.sides[hostile] & bitboards.checkmask;
         let mut ep_capture = attacks & ep_square & bitboards.checkmask;
@@ -543,6 +545,34 @@ fn set_occupancy(index: u64, bitcount: usize, mut mask: Bitboard) -> Bitboard {
     result
 }
 
+fn find_attacks_on_square(
+    kind: PieceKind,
+    side: Side,
+    on: Square,
+    mut attackers: Bitboard,
+    occupied: Bitboard,
+) -> Bitboard {
+    // Queens require some special fiddeling
+    if kind == PieceKind::Queen {
+        let as_rook = find_attacks_on_square(PieceKind::Rook, side, on, attackers, occupied);
+        let as_bishop = find_attacks_on_square(PieceKind::Bishop, side, on, attackers, occupied);
+        return as_rook | as_bishop;
+    }
+
+    let mut result = Bitboard(0);
+    let from_defender = get_attacks_bitboard(kind, side, on, occupied);
+
+    attackers &= from_defender;
+    result |= attackers;
+
+    while let Some(attacker) = attackers.pop_lsb() {
+        let attacker_square = Square::try_from(attacker).unwrap();
+        result |= get_attacks_bitboard(kind, !side, attacker_square, occupied) & from_defender;
+    }
+
+    result
+}
+
 impl PositionBitboards {
     // TODO: Refactor whatever this is
     fn new(position: &Position) -> Self {
@@ -587,30 +617,24 @@ impl PositionBitboards {
         // Find checkers and generate checkmask
         let in_check = pb.pieces[friendly][PieceKind::King as usize] & pb.attacks != 0;
         if in_check {
-            for (i, mut pieces) in pb.pieces[hostile].into_iter().enumerate() {
+            for (i, pieces) in pb.pieces[hostile].into_iter().enumerate() {
                 let kind = PieceKind::try_from(i).unwrap();
-                let from_king_square =
-                    get_attacks_bitboard(kind, position.side_to_move, king_square, pb.occupied);
 
-                pieces &= from_king_square;
-                pb.checkers |= pieces;
-                pb.checkmask |= pieces;
-
-                while let Some(piece) = pieces.pop_lsb() {
-                    let from = Square::try_from(piece).unwrap();
-                    pb.checkmask |=
-                        get_attacks_bitboard(kind, !position.side_to_move, from, pb.occupied)
-                            & from_king_square;
-                }
+                pb.checkmask |= find_attacks_on_square(
+                    kind,
+                    position.side_to_move,
+                    king_square,
+                    pieces,
+                    pb.occupied,
+                )
             }
+            pb.checkers = pb.sides[hostile] & pb.checkmask;
         } else {
             pb.checkmask = BITBOARD_ALL;
         };
 
         // Find pins and generate pinmask
-        let mut hv_pieces = pb.pieces[hostile][PieceKind::Rook as usize]
-            | pb.pieces[hostile][PieceKind::Queen as usize];
-        let mut d12_pieces = pb.pieces[hostile][PieceKind::Bishop as usize]
+        let hv_pieces = pb.pieces[hostile][PieceKind::Rook as usize]
             | pb.pieces[hostile][PieceKind::Queen as usize];
 
         let from_king = get_attacks_bitboard(
@@ -620,24 +644,29 @@ impl PositionBitboards {
             pb.occupied,
         );
 
-        while let Some(attacker) = hv_pieces.pop_lsb() {
+        let mut occupied = pb.occupied;
+        let mut pred = hv_pieces;
+        while let Some(attacker) = pred.pop_lsb() {
             let from = Square::try_from(attacker).unwrap();
 
             let from_attacker =
                 get_attacks_bitboard(PieceKind::Rook, !position.side_to_move, from, pb.occupied);
 
             let overlap = from_king & from_attacker;
-            let mut pinned = overlap & pb.sides[friendly];
-
-            while let Some(defender) = pinned.pop_lsb() {
-                let from = Square::try_from(defender).unwrap();
-                let from_defender =
-                    get_attacks_bitboard(PieceKind::Rook, position.side_to_move, from, pb.occupied);
-                pb.pinmask_hv |= (from_king | from_attacker) & from_defender;
-                pb.pinmask_hv.on(defender);
-            }
+            let pinned = overlap & pb.sides[friendly];
+            occupied &= !pinned;
         }
-        pb.pinmask_hv.off(king_square);
+
+        pb.pinmask_hv = find_attacks_on_square(
+            PieceKind::Rook,
+            position.side_to_move,
+            king_square,
+            hv_pieces,
+            occupied,
+        );
+
+        let d12_pieces = pb.pieces[hostile][PieceKind::Bishop as usize]
+            | pb.pieces[hostile][PieceKind::Queen as usize];
 
         let from_king = get_attacks_bitboard(
             PieceKind::Bishop,
@@ -646,28 +675,26 @@ impl PositionBitboards {
             pb.occupied,
         );
 
-        while let Some(attacker) = d12_pieces.pop_lsb() {
+        let mut occupied = pb.occupied;
+        let mut pred = d12_pieces;
+        while let Some(attacker) = pred.pop_lsb() {
             let from = Square::try_from(attacker).unwrap();
 
             let from_attacker =
                 get_attacks_bitboard(PieceKind::Bishop, !position.side_to_move, from, pb.occupied);
 
             let overlap = from_king & from_attacker;
-            let mut pinned = overlap & pb.sides[friendly];
-
-            while let Some(defender) = pinned.pop_lsb() {
-                let from = Square::try_from(defender).unwrap();
-                let from_defender = get_attacks_bitboard(
-                    PieceKind::Bishop,
-                    position.side_to_move,
-                    from,
-                    pb.occupied,
-                );
-                pb.pinmask_d12 |= (from_king | from_attacker) & from_defender;
-                pb.pinmask_d12.on(defender);
-            }
+            let pinned = overlap & pb.sides[friendly];
+            occupied &= !pinned;
         }
-        pb.pinmask_d12.off(king_square);
+
+        pb.pinmask_d12 = find_attacks_on_square(
+            PieceKind::Bishop,
+            position.side_to_move,
+            king_square,
+            d12_pieces,
+            occupied,
+        );
 
         pb
     }
