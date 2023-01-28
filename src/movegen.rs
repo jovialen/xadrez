@@ -1,3 +1,4 @@
+use crate::board::BOARD_RANKS;
 #[allow(clippy::wildcard_imports)]
 use crate::{
     bitboards::{constants::*, Bitboard},
@@ -219,9 +220,6 @@ struct Magic {
 
 pub(crate) fn generate_legal_moves(position: &Position) -> Vec<Move> {
     let pb = PositionBitboards::new(position);
-    let friendly = position.side_to_move as usize;
-    let hostile = !position.side_to_move as usize;
-
     let mut result = Vec::with_capacity(150);
 
     if pb.checkers.pop_count() < 2 {
@@ -232,19 +230,7 @@ pub(crate) fn generate_legal_moves(position: &Position) -> Vec<Move> {
         generate_pawn_moves(&pb, position.side_to_move, position.en_passant, &mut result);
     }
 
-    let mut kings = pb.pieces[friendly][PieceKind::King as usize];
-    while let Some(square) = kings.pop_lsb() {
-        // Safety: Always in range 0..64
-        let from = Square::try_from(square).unwrap();
-        let moves = get_attacks_bitboard(PieceKind::King, position.side_to_move, from, pb.occupied)
-            & !pb.king_danger_squares;
-
-        let quiets = moves & !pb.occupied;
-        let captures = moves & pb.sides[hostile];
-
-        push_moves(MoveKind::Quiet, quiets, from, &mut result);
-        push_moves(MoveKind::Capture, captures, from, &mut result);
-    }
+    generate_king_moves(&pb, position.side_to_move, position.castling, &mut result);
 
     result
 }
@@ -380,6 +366,60 @@ fn generate_pawn_moves(
             push_moves(MoveKind::Quiet, quiets, from, dest);
             push_moves(MoveKind::Capture, captures, from, dest);
             push_moves(MoveKind::EnPassant, ep_capture, from, dest);
+        }
+    }
+}
+
+fn generate_king_moves(
+    bitboards: &PositionBitboards,
+    side: Side,
+    castling: [[bool; 2]; SIDE_COUNT],
+    dest: &mut Vec<Move>,
+) {
+    let friendly = side as usize;
+    let hostile = !side as usize;
+
+    let mut kings = bitboards.pieces[friendly][PieceKind::King as usize];
+    while let Some(square) = kings.pop_lsb() {
+        // Safety: Always in range 0..64
+        let from = Square::try_from(square).unwrap();
+        let moves = get_attacks_bitboard(PieceKind::King, side, from, bitboards.occupied)
+            & !bitboards.king_danger_squares;
+
+        let quiets = moves & !bitboards.occupied;
+        let captures = moves & bitboards.sides[hostile];
+
+        push_moves(MoveKind::Quiet, quiets, from, dest);
+        push_moves(MoveKind::Capture, captures, from, dest);
+
+        if bitboards.checkers.pop_count() == 0 {
+            const CASTLING_DESTS: [[Square; 2]; SIDE_COUNT] =
+                [[Square::G1, Square::C1], [Square::G8, Square::C8]];
+            const BLACK_OFFSET: usize = (BOARD_RANKS - 1) * BOARD_FILES;
+            const REQUIRED_CLEARING: [[u64; 2]; SIDE_COUNT] = [
+                [0b01100000, 0b00001110],
+                [0b01100000 << BLACK_OFFSET, 0b00001110 << BLACK_OFFSET],
+            ];
+            const REQUIRED_CONTROL: [[u64; 2]; SIDE_COUNT] = [
+                [0b01100000, 0b00001100],
+                [0b01100000 << BLACK_OFFSET, 0b00001100 << BLACK_OFFSET],
+            ];
+
+            for i in 0..2 {
+                if castling[friendly][i]
+                    && bitboards.occupied & REQUIRED_CLEARING[friendly][i] == 0
+                    && bitboards.attacks & REQUIRED_CONTROL[friendly][i] == 0
+                    && !bitboards
+                        .king_danger_squares
+                        .get(CASTLING_DESTS[friendly][i])
+                {
+                    dest.push(Move {
+                        from,
+                        to: CASTLING_DESTS[friendly][i],
+                        kind: MoveKind::Castling,
+                    });
+                }
+            }
         }
     }
 }
@@ -626,7 +666,7 @@ impl PositionBitboards {
                     king_square,
                     pieces,
                     pb.occupied,
-                )
+                );
             }
             pb.checkers = pb.sides[hostile] & pb.checkmask;
         } else {
@@ -836,7 +876,7 @@ mod tests {
 
         #[test]
         fn perft_test_short_castling_check() {
-            let fen = "3k4/8/8/8/8/8/8/R3K3 w Q - 0 1";
+            let fen = "5k2/8/8/8/8/8/8/4K2R w K - 0 1";
             let mut chessboard = Chessboard::from_fen(fen).unwrap();
             assert_eq!(chessboard.perft(6, false), 661_072);
         }

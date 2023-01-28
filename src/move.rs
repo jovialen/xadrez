@@ -27,6 +27,7 @@ pub(crate) enum MoveKind {
     Capture,
     EnPassant,
     Promotion(PieceKind),
+    Castling,
 }
 
 impl Move {
@@ -195,6 +196,7 @@ mod tests {
             assert_eq!(Move::new(A1, A2, Any), Move::new(A1, A2, Quiet));
             assert_eq!(Move::new(A1, A2, Any), Move::new(A1, A2, Capture));
             assert_eq!(Move::new(A1, A2, Any), Move::new(A1, A2, EnPassant));
+            assert_eq!(Move::new(A1, A2, Any), Move::new(A1, A2, Castling));
 
             assert_ne!(Move::new(A1, A2, Any), Move::new(A1, A2, Promotion(Queen)));
             assert_ne!(Move::new(A1, A2, Any), Move::new(A1, A2, Promotion(Bishop)));
@@ -204,6 +206,7 @@ mod tests {
             assert_eq!(Move::new(A1, A2, Quiet), Move::new(A1, A2, Any));
             assert_eq!(Move::new(A1, A2, Capture), Move::new(A1, A2, Any));
             assert_eq!(Move::new(A1, A2, EnPassant), Move::new(A1, A2, Any));
+            assert_eq!(Move::new(A1, A2, Castling), Move::new(A1, A2, Any));
 
             assert_ne!(Move::new(A1, A2, Promotion(Queen)), Move::new(A1, A2, Any));
             assert_ne!(Move::new(A1, A2, Promotion(Bishop)), Move::new(A1, A2, Any));

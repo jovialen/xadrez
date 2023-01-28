@@ -144,6 +144,11 @@ impl Chessboard {
     /// board.
     #[allow(clippy::missing_panics_doc)]
     pub fn make_move(&mut self, m: Move) -> Result<(), MoveError> {
+        const ROOK_SOURCES: [[Square; 2]; SIDE_COUNT] =
+            [[Square::H1, Square::A1], [Square::H8, Square::A8]];
+        const ROOK_DESTS: [[Square; 2]; SIDE_COUNT] =
+            [[Square::F1, Square::D1], [Square::F8, Square::D8]];
+
         // Check if move is legal
         let m = if let Some(legal) = self.legal_moves.iter().find(|&legal| legal == &m) {
             // Filter out Any kind moves with the actual legal equivilant.
@@ -151,6 +156,8 @@ impl Chessboard {
         } else {
             return Err(MoveError::IllegalMove);
         };
+
+        let friendly = self.position.side_to_move as usize;
 
         // Save the current position in the history
         self.save_current_to_history();
@@ -168,8 +175,6 @@ impl Chessboard {
 
         self.position.halftime += 1;
         self.position.fulltime += 1;
-
-        self.position.side_to_move = !self.position.side_to_move;
 
         // Check for any special conditions with the move
         match m.kind {
@@ -189,6 +194,23 @@ impl Chessboard {
                     piece.kind = into;
                 }
             }
+            MoveKind::Castling => {
+                let side = m.to.side() as usize;
+
+                assert!(self.position.castling[friendly][side]);
+
+                let src = ROOK_SOURCES[friendly][side];
+                let dest = ROOK_DESTS[friendly][side];
+
+                assert_eq!(
+                    self.position[src],
+                    Some(Piece::new(self.position.side_to_move, PieceKind::Rook))
+                );
+                assert_eq!(self.position[dest], None);
+
+                self.position[dest] = self.position[src];
+                self.position[src] = None;
+            }
             MoveKind::Any => unreachable!("No move of kind \"Any\" should ever be used."),
             MoveKind::Quiet => (),
         }
@@ -196,12 +218,33 @@ impl Chessboard {
         if to_move.kind == PieceKind::Pawn {
             self.position.halftime = 0;
 
-            let ep_distance = 2.0;
-            if m.from.distance(m.to) >= ep_distance {
+            const EP_DISTANCE: f64 = 2.0;
+            if m.from.distance(m.to) >= EP_DISTANCE {
                 let ep_index = (m.from as usize + m.to as usize) / 2;
                 self.position.en_passant = Some(Square::try_from(ep_index).unwrap());
             }
+        } else if to_move.kind == PieceKind::King {
+            self.position.castling[friendly] = [false, false];
         }
+
+        // Update castling
+        if self.position.castling[friendly][0] {}
+        for side in 0..SIDE_COUNT {
+            for i in 0..2 {
+                self.position.castling[side][i] &= self.position[ROOK_SOURCES[side][i]]
+                    == Some(Piece::new(
+                        match side {
+                            0 => Side::White,
+                            1 => Side::Black,
+                            _ => unreachable!(),
+                        },
+                        PieceKind::Rook,
+                    ));
+            }
+        }
+
+        // Update side to move
+        self.position.side_to_move = !self.position.side_to_move;
 
         // Update legal moves
         self.legal_moves = movegen::generate_legal_moves(&self.position);
@@ -529,6 +572,16 @@ impl Square {
             6 => BITBOARD_FILE_G,
             7 => BITBOARD_FILE_H,
             _ => unreachable!(),
+        }
+    }
+
+    #[inline]
+    fn side(self) -> PieceKind {
+        let (_, file) = self.to_rank_file();
+        if file >= 4 {
+            PieceKind::King
+        } else {
+            PieceKind::Queen
         }
     }
 }
