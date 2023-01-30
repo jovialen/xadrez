@@ -603,10 +603,12 @@ impl PositionBitboards {
         let hostile = !position.side_to_move as usize;
 
         // Fill piece bitboards
-        for (piece, square) in position.pieces() {
-            pb.pieces[piece.side as usize][piece.kind as usize].on(square);
-            pb.sides[piece.side as usize].on(square);
-            pb.occupied.on(square);
+        for (square, content) in position.squares.iter().enumerate() {
+            if let Some(piece) = content {
+                pb.pieces[piece.side as usize][piece.kind as usize].on(square);
+                pb.sides[piece.side as usize].on(square);
+                pb.occupied.on(square);
+            }
         }
 
         let king_square = pb.pieces[friendly][King as usize]
@@ -672,7 +674,6 @@ impl PositionBitboards {
 
         for (i, pieces) in hostile.into_iter().enumerate() {
             let kind = PieceKind::try_from(i).unwrap();
-
             checkmask |= find_attacks_on_square(kind, side, king_square, pieces, occupied);
         }
 
