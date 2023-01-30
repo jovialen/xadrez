@@ -1,3 +1,4 @@
+use crate::board::Square;
 use std::{fmt, ops};
 
 pub(crate) mod constants {
@@ -80,10 +81,18 @@ impl Bitboard {
         }
     }
 
+    pub fn lsb_square(self) -> Option<Square> {
+        self.lsb().and_then(|i| Square::try_from(i).ok())
+    }
+
     pub fn pop_lsb(&mut self) -> Option<usize> {
         let lsb = self.lsb()?;
         self.off(lsb);
         Some(lsb)
+    }
+
+    pub fn pop_lsb_square(&mut self) -> Option<Square> {
+        self.pop_lsb().and_then(|i| Square::try_from(i).ok())
     }
 
     pub fn pop_count(self) -> usize {

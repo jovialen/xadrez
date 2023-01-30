@@ -189,7 +189,6 @@ const BISHOP_MAGICS: [u64; BOARD_SIZE] = [
     0x4010_2000_a0a6_0140,
 ];
 
-#[derive(Default)]
 struct PositionBitboards {
     pieces: [[Bitboard; PIECE_KIND_COUNT]; SIDE_COUNT],
     sides: [Bitboard; SIDE_COUNT],
@@ -246,15 +245,9 @@ fn generate_moves(
     let hostile = !side as usize;
 
     let mut pieces = bitboards.pieces[friendly][kind_index];
-    let mut pinned_hv = bitboards.pinmask_hv & pieces;
-    let mut pinned_d12 = bitboards.pinmask_d12 & pieces;
-
-    while let Some(square) = pieces.pop_lsb() {
-        // Safety: Always in range 0..64
-        let from = Square::try_from(square).unwrap();
-
-        let is_pinned_hv = Some(square) == pinned_hv.lsb();
-        let is_pinned_d12 = Some(square) == pinned_d12.lsb();
+    while let Some(from) = pieces.pop_lsb_square() {
+        let is_pinned_hv = bitboards.pinmask_hv.get(from);
+        let is_pinned_d12 = bitboards.pinmask_d12.get(from);
 
         let pseudo_moves = get_attacks_bitboard(kind, side, from, bitboards.occupied);
         let mut legal_moves = pseudo_moves & bitboards.checkmask;
@@ -262,11 +255,9 @@ fn generate_moves(
         if is_pinned_hv {
             legal_moves &= ROOK_MOVES.get(from, bitboards.occupied);
             legal_moves &= bitboards.pinmask_hv;
-            pinned_hv.pop_lsb();
         } else if is_pinned_d12 {
             legal_moves &= BISHOP_MOVES.get(from, bitboards.occupied);
             legal_moves &= bitboards.pinmask_d12;
-            pinned_d12.pop_lsb();
         }
 
         let quiets = legal_moves & !bitboards.occupied;
@@ -296,19 +287,12 @@ fn generate_pawn_moves(
     });
 
     let mut pawns = bitboards.pieces[friendly][PAWN];
-    let mut promotions = pawns & PROMOTION_RANK[friendly];
-    let mut pinned_hv = pawns & bitboards.pinmask_hv;
-    let mut pinned_d12 = pawns & bitboards.pinmask_d12;
+    while let Some(from) = pawns.pop_lsb_square() {
+        let promoting = PROMOTION_RANK[friendly].get(from);
+        let is_pinned_hv = bitboards.pinmask_hv.get(from);
+        let is_pinned_d12 = bitboards.pinmask_d12.get(from);
 
-    while let Some(pawn) = pawns.pop_lsb() {
-        // Safety: Always in range 0..64
-        let from = Square::try_from(pawn).unwrap();
-
-        let promoting = Some(pawn) == promotions.lsb();
-        let is_pinned_hv = Some(pawn) == pinned_hv.lsb();
-        let is_pinned_d12 = Some(pawn) == pinned_d12.lsb();
-
-        let (mut moves, attacks) = PAWN_MOVES[friendly][pawn];
+        let (mut moves, attacks) = PAWN_MOVES[friendly][from as usize];
         moves &= ROOK_MOVES.get(from, bitboards.occupied);
 
         let mut quiets = moves & !bitboards.occupied & bitboards.checkmask;
@@ -319,12 +303,10 @@ fn generate_pawn_moves(
             quiets &= bitboards.pinmask_hv;
             captures &= bitboards.pinmask_hv;
             ep_capture &= bitboards.pinmask_hv;
-            pinned_hv.pop_lsb();
         } else if is_pinned_d12 {
             quiets &= bitboards.pinmask_d12;
             captures &= bitboards.pinmask_d12;
             ep_capture &= bitboards.pinmask_d12;
-            pinned_d12.pop_lsb();
         }
 
         #[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
@@ -335,14 +317,11 @@ fn generate_pawn_moves(
 
             let mut occupied = bitboards.occupied;
             occupied.off(ep_pawn);
-            occupied.off(pawn);
+            occupied.off(from);
 
-            let king = Square::try_from(
-                bitboards.pieces[friendly][PieceKind::King as usize]
-                    .lsb()
-                    .unwrap(),
-            )
-            .unwrap();
+            let king = bitboards.pieces[friendly][PieceKind::King as usize]
+                .lsb_square()
+                .unwrap();
 
             let hostile_queens = bitboards.pieces[hostile][PieceKind::Queen as usize];
             let hostile_bishops = bitboards.pieces[hostile][PieceKind::Bishop as usize];
@@ -361,7 +340,6 @@ fn generate_pawn_moves(
         if promoting {
             let all = quiets | captures;
             push_promotions(all, from, dest);
-            promotions.pop_lsb();
         } else {
             push_moves(MoveKind::Quiet, quiets, from, dest);
             push_moves(MoveKind::Capture, captures, from, dest);
@@ -380,9 +358,7 @@ fn generate_king_moves(
     let hostile = !side as usize;
 
     let mut kings = bitboards.pieces[friendly][PieceKind::King as usize];
-    while let Some(square) = kings.pop_lsb() {
-        // Safety: Always in range 0..64
-        let from = Square::try_from(square).unwrap();
+    while let Some(from) = kings.pop_lsb_square() {
         let moves = get_attacks_bitboard(PieceKind::King, side, from, bitboards.occupied)
             & !bitboards.king_danger_squares;
 
@@ -395,24 +371,9 @@ fn generate_king_moves(
         if bitboards.checkers.pop_count() == 0 {
             const CASTLING_DESTS: [[Square; 2]; SIDE_COUNT] =
                 [[Square::G1, Square::C1], [Square::G8, Square::C8]];
-            const BLACK_OFFSET: usize = (BOARD_RANKS - 1) * BOARD_FILES;
-            const REQUIRED_CLEARING: [[u64; 2]; SIDE_COUNT] = [
-                [0b0110_0000, 0b0000_1110],
-                [0b0110_0000 << BLACK_OFFSET, 0b0000_1110 << BLACK_OFFSET],
-            ];
-            const REQUIRED_CONTROL: [[u64; 2]; SIDE_COUNT] = [
-                [0b0110_0000, 0b0000_1100],
-                [0b0110_0000 << BLACK_OFFSET, 0b0000_1100 << BLACK_OFFSET],
-            ];
 
             for i in 0..2 {
-                if castling[friendly][i]
-                    && bitboards.occupied & REQUIRED_CLEARING[friendly][i] == 0
-                    && bitboards.attacks & REQUIRED_CONTROL[friendly][i] == 0
-                    && !bitboards
-                        .king_danger_squares
-                        .get(CASTLING_DESTS[friendly][i])
-                {
+                if can_castle(friendly, i, castling, bitboards) {
                     dest.push(Move {
                         from,
                         to: CASTLING_DESTS[friendly][i],
@@ -439,11 +400,31 @@ fn get_attacks_bitboard(
     }
 }
 
-fn push_promotions(mut bb: Bitboard, from: Square, dest: &mut Vec<Move>) {
-    while let Some(square) = bb.pop_lsb() {
-        // Safety: Always in range 0..64
-        let to = Square::try_from(square).unwrap();
+fn can_castle(
+    friendly: usize,
+    board_side: usize,
+    permisions: [[bool; 2]; SIDE_COUNT],
+    bitboards: &PositionBitboards,
+) -> bool {
+    const BLACK_OFFSET: usize = (BOARD_RANKS - 1) * BOARD_FILES;
+    const REQUIRED_CLEARING: [[u64; 2]; SIDE_COUNT] = [
+        [0b0110_0000, 0b0000_1110],
+        [0b0110_0000 << BLACK_OFFSET, 0b0000_1110 << BLACK_OFFSET],
+    ];
+    const REQUIRED_CONTROL: [[u64; 2]; SIDE_COUNT] = [
+        [0b0110_0000, 0b0000_1100],
+        [0b0110_0000 << BLACK_OFFSET, 0b0000_1100 << BLACK_OFFSET],
+    ];
 
+    permisions[friendly][board_side]
+        && bitboards.occupied & REQUIRED_CLEARING[friendly][board_side] == 0
+        && (bitboards.attacks | bitboards.king_danger_squares)
+            & REQUIRED_CONTROL[friendly][board_side]
+            == 0
+}
+
+fn push_promotions(mut bb: Bitboard, from: Square, dest: &mut Vec<Move>) {
+    while let Some(to) = bb.pop_lsb_square() {
         dest.push(Move::new(from, to, MoveKind::Promotion(PieceKind::Queen)));
         dest.push(Move::new(from, to, MoveKind::Promotion(PieceKind::Bishop)));
         dest.push(Move::new(from, to, MoveKind::Promotion(PieceKind::Rook)));
@@ -452,9 +433,7 @@ fn push_promotions(mut bb: Bitboard, from: Square, dest: &mut Vec<Move>) {
 }
 
 fn push_moves(kind: MoveKind, mut bb: Bitboard, from: Square, dest: &mut Vec<Move>) {
-    while let Some(square) = bb.pop_lsb() {
-        // Safety: Always in range 0..64
-        let to = Square::try_from(square).unwrap();
+    while let Some(to) = bb.pop_lsb_square() {
         dest.push(Move::new(from, to, kind));
     }
 }
@@ -605,28 +584,23 @@ fn find_attacks_on_square(
     attackers &= from_defender;
     result |= attackers;
 
-    while let Some(attacker) = attackers.pop_lsb() {
-        let attacker_square = Square::try_from(attacker).unwrap();
-        result |= get_attacks_bitboard(kind, !side, attacker_square, occupied) & from_defender;
+    while let Some(attacker) = attackers.pop_lsb_square() {
+        result |= get_attacks_bitboard(kind, !side, attacker, occupied) & from_defender;
     }
 
     result
 }
 
 impl PositionBitboards {
-    // TODO: Refactor whatever this is
+    #[allow(clippy::enum_glob_use)]
     fn new(position: &Position) -> Self {
+        use crate::piece::PieceKind::*;
+
         let mut pb = Self::default();
 
+        let side = position.side_to_move;
         let friendly = position.side_to_move as usize;
         let hostile = !position.side_to_move as usize;
-
-        let king_square = position
-            .pieces()
-            .iter()
-            .find(|(piece, _)| piece.kind == PieceKind::King && piece.side == position.side_to_move)
-            .expect("There must be a king on the board to generate legal moves")
-            .1;
 
         // Fill piece bitboards
         for (piece, square) in position.pieces() {
@@ -635,108 +609,113 @@ impl PositionBitboards {
             pb.occupied.on(square);
         }
 
+        let king_square = pb.pieces[friendly][King as usize]
+            .lsb_square()
+            .expect("Cannot generate moves without a king on the board.");
+
         // Find attacked squares
         for (i, mut pieces) in pb.pieces[hostile].into_iter().enumerate() {
             let kind = PieceKind::try_from(i).unwrap();
 
-            while let Some(piece) = pieces.pop_lsb() {
-                let from = Square::try_from(piece).unwrap();
-
-                pb.attacks |= get_attacks_bitboard(kind, !position.side_to_move, from, pb.occupied)
-                    & !pb.sides[hostile];
+            while let Some(from) = pieces.pop_lsb_square() {
+                pb.attacks |=
+                    get_attacks_bitboard(kind, !side, from, pb.occupied) & !pb.sides[hostile];
 
                 pb.king_danger_squares |= get_attacks_bitboard(
                     kind,
-                    !position.side_to_move,
+                    !side,
                     from,
-                    pb.occupied & !pb.pieces[friendly][PieceKind::King as usize],
+                    pb.occupied & !pb.pieces[friendly][King as usize],
                 );
             }
         }
 
         // Find checkers and generate checkmask
-        let in_check = pb.pieces[friendly][PieceKind::King as usize] & pb.attacks != 0;
+        let in_check = pb.attacks.get(king_square);
         if in_check {
-            for (i, pieces) in pb.pieces[hostile].into_iter().enumerate() {
-                let kind = PieceKind::try_from(i).unwrap();
-
-                pb.checkmask |= find_attacks_on_square(
-                    kind,
-                    position.side_to_move,
-                    king_square,
-                    pieces,
-                    pb.occupied,
-                );
-            }
+            pb.checkmask =
+                Self::generate_checkmask(king_square, side, pb.pieces[hostile], pb.occupied);
             pb.checkers = pb.sides[hostile] & pb.checkmask;
-        } else {
-            pb.checkmask = BITBOARD_ALL;
-        };
+        }
 
         // Find pins and generate pinmask
-        let hv_pieces = pb.pieces[hostile][PieceKind::Rook as usize]
-            | pb.pieces[hostile][PieceKind::Queen as usize];
-
-        let from_king = get_attacks_bitboard(
-            PieceKind::Rook,
-            position.side_to_move,
-            king_square,
-            pb.occupied,
-        );
-
-        let mut occupied = pb.occupied;
-        let mut pred = hv_pieces;
-        while let Some(attacker) = pred.pop_lsb() {
-            let from = Square::try_from(attacker).unwrap();
-
-            let from_attacker =
-                get_attacks_bitboard(PieceKind::Rook, !position.side_to_move, from, pb.occupied);
-
-            let overlap = from_king & from_attacker;
-            let pinned = overlap & pb.sides[friendly];
-            occupied &= !pinned;
-        }
-
-        pb.pinmask_hv = find_attacks_on_square(
-            PieceKind::Rook,
-            position.side_to_move,
+        let hv_pieces = pb.pieces[hostile][Rook as usize] | pb.pieces[hostile][Queen as usize];
+        pb.pinmask_hv = Self::find_pins(
+            Rook,
+            side,
             king_square,
             hv_pieces,
-            occupied,
-        );
-
-        let d12_pieces = pb.pieces[hostile][PieceKind::Bishop as usize]
-            | pb.pieces[hostile][PieceKind::Queen as usize];
-
-        let from_king = get_attacks_bitboard(
-            PieceKind::Bishop,
-            position.side_to_move,
-            king_square,
+            pb.sides[friendly],
             pb.occupied,
         );
 
-        let mut occupied = pb.occupied;
-        let mut pred = d12_pieces;
-        while let Some(attacker) = pred.pop_lsb() {
-            let from = Square::try_from(attacker).unwrap();
-
-            let from_attacker =
-                get_attacks_bitboard(PieceKind::Bishop, !position.side_to_move, from, pb.occupied);
-
-            let overlap = from_king & from_attacker;
-            let pinned = overlap & pb.sides[friendly];
-            occupied &= !pinned;
-        }
-
-        pb.pinmask_d12 = find_attacks_on_square(
-            PieceKind::Bishop,
-            position.side_to_move,
+        let d12_pieces = pb.pieces[hostile][Bishop as usize] | pb.pieces[hostile][Queen as usize];
+        pb.pinmask_d12 = Self::find_pins(
+            Bishop,
+            side,
             king_square,
             d12_pieces,
-            occupied,
+            pb.sides[friendly],
+            pb.occupied,
         );
 
         pb
+    }
+
+    fn generate_checkmask(
+        king_square: Square,
+        side: Side,
+        hostile: [Bitboard; PIECE_KIND_COUNT],
+        occupied: Bitboard,
+    ) -> Bitboard {
+        let mut checkmask = Bitboard(0);
+
+        for (i, pieces) in hostile.into_iter().enumerate() {
+            let kind = PieceKind::try_from(i).unwrap();
+
+            checkmask |= find_attacks_on_square(kind, side, king_square, pieces, occupied);
+        }
+
+        checkmask
+    }
+
+    fn find_pins(
+        kind: PieceKind,
+        side: Side,
+        king_square: Square,
+        attackers: Bitboard,
+        defenders: Bitboard,
+        occupied: Bitboard,
+    ) -> Bitboard {
+        let from_king = get_attacks_bitboard(kind, side, king_square, occupied);
+
+        let mut occupied = occupied;
+        let mut pred = attackers;
+        while let Some(attacker) = pred.pop_lsb_square() {
+            let from_attacker = get_attacks_bitboard(kind, !side, attacker, occupied);
+            let overlap = from_king & from_attacker;
+            let pinned = overlap & defenders;
+            occupied &= !pinned;
+        }
+
+        find_attacks_on_square(kind, side, king_square, attackers, occupied)
+    }
+}
+
+impl Default for PositionBitboards {
+    fn default() -> Self {
+        Self {
+            pieces: [[Bitboard(0); PIECE_KIND_COUNT]; SIDE_COUNT],
+            sides: [Bitboard(0); SIDE_COUNT],
+            occupied: Bitboard(0),
+
+            checkmask: BITBOARD_ALL,
+            checkers: Bitboard(0),
+            pinmask_hv: Bitboard(0),
+            pinmask_d12: Bitboard(0),
+            attacks: Bitboard(0),
+            king_danger_squares: Bitboard(0),
+        }
     }
 }
 
