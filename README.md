@@ -29,6 +29,8 @@ fn main() {
 	chessboard.set_position("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
 
 	chessboard.make_move(Move::from_str("e2e4"));
+
+	println!("{}", chessboard.evaluate());
 }
 ```
 
