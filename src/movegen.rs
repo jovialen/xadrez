@@ -1,11 +1,9 @@
-use crate::board::BOARD_RANKS;
 #[allow(clippy::wildcard_imports)]
-use crate::{
-    bitboards::{constants::*, Bitboard},
-    board::{Direction, Position, Square, BOARD_FILES, BOARD_SIZE},
-    piece::{PieceKind, Side, PIECE_KIND_COUNT, SIDE_COUNT},
-    r#move::{Move, MoveKind},
-};
+use crate::bitboards::constants::*;
+use crate::bitboards::Bitboard;
+use crate::board::{Direction, Position, Square, BOARD_FILES, BOARD_RANKS, BOARD_SIZE};
+use crate::piece::{PieceKind, Side, PIECE_KIND_COUNT, SIDE_COUNT};
+use crate::r#move::{Move, MoveKind};
 use lazy_static::lazy_static;
 
 // Array for all types of piece moves, except for the pawn.

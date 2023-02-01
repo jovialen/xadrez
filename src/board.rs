@@ -3,15 +3,13 @@
 //! Provides the structures relating to the chessboard as a whole.
 
 #[allow(clippy::wildcard_imports)]
-use crate::{
-    bitboards::{constants::*, Bitboard},
-    error::{MoveError, ParseFenError},
-    evaluation,
-    fen::{FenString, FEN_STARTING_POSITION},
-    movegen,
-    piece::{Piece, PieceKind, Side, SIDE_COUNT},
-    r#move::{Move, MoveKind},
-};
+use crate::bitboards::constants::*;
+use crate::bitboards::Bitboard;
+use crate::error::{MoveError, ParseFenError};
+use crate::fen::{FenString, FEN_STARTING_POSITION};
+use crate::piece::{Piece, PieceKind, Side, SIDE_COUNT};
+use crate::r#move::{Move, MoveKind};
+use crate::{evaluation, movegen};
 use itertools::Itertools;
 use num_derive::FromPrimitive;
 use std::str::FromStr;
