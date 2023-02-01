@@ -174,8 +174,10 @@ impl Chessboard {
         self.position[m.to] = self.position[m.from];
         self.position[m.from] = None;
 
-        self.position.halftime += 1;
-        self.position.fulltime += 1;
+        if self.position.side_to_move == Side::Black {
+            self.position.halftime += 1;
+            self.position.fulltime += 1;
+        }
 
         // Check for any special conditions with the move
         match m.kind {
