@@ -11,6 +11,7 @@ To use **Xadrez** in your projects, first include it as a dependency in your `Ca
 ```toml
 [dependencies]
 xadrez = { path = "path/to/xadrez" }
+xadrez = { git = "https://github.com/jovialen/xadrez" }
 ```
 
 ```rust
