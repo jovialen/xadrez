@@ -6,6 +6,7 @@
 use crate::{
     bitboards::{constants::*, Bitboard},
     error::{MoveError, ParseFenError},
+    evaluation,
     fen::{FenString, FEN_STARTING_POSITION},
     movegen,
     piece::{Piece, PieceKind, Side, SIDE_COUNT},
@@ -261,6 +262,28 @@ impl Chessboard {
             self.position = last_pos;
             self.legal_moves = last_moves;
         }
+    }
+
+    /// Evaluate the current position.
+    ///
+    /// The position will be evaluated from the perspective of white and return
+    /// the advantage in approximate centi-pawns.
+    #[must_use]
+    pub fn evaluate(&self) -> i32 {
+        let relative_to_side = self.evaluate_relative();
+        match self.position.side_to_move {
+            Side::White => relative_to_side,
+            Side::Black => -relative_to_side,
+        }
+    }
+
+    /// Evaluate the current position relative to the side to move.
+    ///
+    /// The position will be evaluated from the perspective of the side to move
+    /// and return the advantage in approximate centi-pawns.
+    #[must_use]
+    pub fn evaluate_relative(&self) -> i32 {
+        evaluation::evaluate_position(&self.position)
     }
 
     /// Perft move enumeration function.

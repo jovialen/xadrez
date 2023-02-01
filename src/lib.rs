@@ -11,6 +11,7 @@
 mod bitboards;
 pub mod board;
 pub mod error;
+mod evaluation;
 pub mod fen;
 pub mod r#move;
 mod movegen;
