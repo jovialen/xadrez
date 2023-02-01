@@ -1,5 +1,6 @@
 use crate::board::Position;
-use crate::piece::{Piece, PieceKind, Side};
+use crate::piece::constants::{BLACK_KING, WHITE_KING};
+use crate::piece::{PieceKind, Side};
 use binread::BinRead;
 use lazy_static::lazy_static;
 use nnue::stockfish::halfkp::{SfHalfKpFullModel, SfHalfKpState};
@@ -24,15 +25,9 @@ fn create_state(position: &Position) -> Option<SfHalfKpState> {
 
     for (square, content) in position.squares.iter().enumerate() {
         if let Some(piece) = content {
-            match piece {
-                Piece {
-                    kind: PieceKind::King,
-                    side: Side::White,
-                } => white_king = nnue_square(square),
-                Piece {
-                    kind: PieceKind::King,
-                    side: Side::Black,
-                } => black_king = nnue_square(square),
+            match *piece {
+                WHITE_KING => white_king = nnue_square(square),
+                BLACK_KING => black_king = nnue_square(square),
                 _ => (),
             }
         }
