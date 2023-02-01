@@ -1,7 +1,5 @@
-use crate::{
-    board::Position,
-    piece::{Piece, PieceKind, Side},
-};
+use crate::board::Position;
+use crate::piece::{Piece, PieceKind, Side};
 use binread::BinRead;
 use lazy_static::lazy_static;
 use nnue::stockfish::halfkp::{SfHalfKpFullModel, SfHalfKpState};

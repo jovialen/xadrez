@@ -286,7 +286,8 @@ impl fmt::Debug for Bitboard {
 
 #[cfg(test)]
 mod tests {
-    use super::{constants::BITBOARD_ALL, *};
+    use super::constants::BITBOARD_ALL;
+    use super::*;
     use crate::board::Square;
 
     #[test]

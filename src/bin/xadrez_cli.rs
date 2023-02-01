@@ -1,13 +1,12 @@
 // None of this is meant to be pretty or... good. Just a debug tool.
 
 use itertools::Itertools;
-use std::{io, str::FromStr};
-use xadrez::{
-    board::{Chessboard, Square},
-    error::ParseFenError,
-    fen::FEN_STARTING_POSITION,
-    r#move::Move,
-};
+use std::io;
+use std::str::FromStr;
+use xadrez::board::{Chessboard, Square};
+use xadrez::error::ParseFenError;
+use xadrez::fen::FEN_STARTING_POSITION;
+use xadrez::r#move::Move;
 
 fn position<'a, I: Iterator<Item = &'a str>>(
     board: &mut Chessboard,

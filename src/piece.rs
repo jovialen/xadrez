@@ -4,7 +4,8 @@
 
 use num_derive::FromPrimitive;
 
-use crate::{board::Direction, error::ParseFenError};
+use crate::board::Direction;
+use crate::error::ParseFenError;
 use std::{fmt, ops};
 
 /// Constants for all the types of chess pieces.

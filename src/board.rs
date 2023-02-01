@@ -14,7 +14,8 @@ use crate::{
 };
 use itertools::Itertools;
 use num_derive::FromPrimitive;
-use std::{fmt, ops, str::FromStr};
+use std::str::FromStr;
+use std::{fmt, ops};
 
 /// Count of files on the chessboard.
 ///

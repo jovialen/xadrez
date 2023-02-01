@@ -2,8 +2,11 @@
 //!
 //! Provides the structures relating to the changes on the chessboard.
 
-use crate::{board::Square, error::ParseLANError, piece::PieceKind};
-use std::{fmt, str::FromStr};
+use crate::board::Square;
+use crate::error::ParseLANError;
+use crate::piece::PieceKind;
+use std::fmt;
+use std::str::FromStr;
 
 /// Structure representing a single move on the chessboard.
 ///
@@ -185,10 +188,8 @@ mod tests {
     mod eq {
         #[allow(clippy::enum_glob_use)]
         use super::{MoveKind::*, *};
-        use crate::{
-            board::Square::{A1, A2, A3, B1},
-            piece::PieceKind::{Bishop, Knight, Queen, Rook},
-        };
+        use crate::board::Square::{A1, A2, A3, B1};
+        use crate::piece::PieceKind::{Bishop, Knight, Queen, Rook};
 
         #[test]
         fn any_is_all_except_promotion() {

@@ -6,7 +6,9 @@
 
 #[cfg(doc)]
 use crate::board::Chessboard;
-use std::{error::Error, fmt, num::ParseIntError};
+use std::error::Error;
+use std::fmt;
+use std::num::ParseIntError;
 
 /// An error which can be returned while parsing a FEN string.
 #[derive(Debug)]

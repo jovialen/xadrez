@@ -789,7 +789,8 @@ mod tests {
     use super::*;
 
     mod movegen {
-        use crate::{board::Chessboard, fen::FEN_STARTING_POSITION};
+        use crate::board::Chessboard;
+        use crate::fen::FEN_STARTING_POSITION;
 
         #[test]
         fn perft_test_startpos() {
@@ -933,10 +934,8 @@ mod tests {
     }
 
     mod bitboard_generation {
-        use crate::{
-            fen::FEN_STARTING_POSITION,
-            piece::{PieceKind, Side},
-        };
+        use crate::fen::FEN_STARTING_POSITION;
+        use crate::piece::{PieceKind, Side};
         use std::str::FromStr;
 
         use super::*;
