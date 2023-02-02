@@ -16,6 +16,7 @@ pub mod fen;
 pub mod r#move;
 mod movegen;
 pub mod piece;
+pub mod search;
 
 /// Quick import for all of the most commonly used data types.
 pub mod prelude {

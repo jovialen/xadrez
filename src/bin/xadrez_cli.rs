@@ -3,10 +3,11 @@
 use itertools::Itertools;
 use std::io;
 use std::str::FromStr;
-use xadrez::board::{Chessboard, Square};
+use xadrez::board::{Chessboard, GameState, Square};
 use xadrez::error::ParseFenError;
 use xadrez::fen::FEN_STARTING_POSITION;
 use xadrez::r#move::Move;
+use xadrez::search::MoveSearcher;
 
 fn position<'a, I: Iterator<Item = &'a str>>(
     board: &mut Chessboard,
@@ -76,6 +77,40 @@ fn print_moves<'a, I: Iterator<Item = &'a str>>(board: &Chessboard, mut args: I)
     }
 }
 
+fn search<'a, I: Iterator<Item = &'a str>>(board: &Chessboard, mut args: I) {
+    let depth = args.next().and_then(|x| x.parse().ok()).unwrap_or(1);
+
+    let best = MoveSearcher::new(board)
+        .max_depth(depth)
+        .search()
+        .expect("Failed to find a valid move");
+
+    println!("Best move: {best}");
+}
+
+fn play<'a, I: Iterator<Item = &'a str>>(board: &mut xadrez::board::Chessboard, mut args: I) {
+    let rounds = args.next().and_then(|x| x.parse().ok()).unwrap_or(1);
+    let depth = args.next().and_then(|x| x.parse().ok()).unwrap_or(1);
+
+    for _ in 0..rounds {
+        if board.state() != GameState::Playing {
+            println!("{}", board.state());
+            return;
+        }
+
+        let best = MoveSearcher::new(board)
+            .max_depth(depth)
+            .search()
+            .expect("Failed to find a valid move");
+
+        println!("{best}");
+
+        board
+            .make_move(best)
+            .expect("All found moves should be valid");
+    }
+}
+
 macro_rules! print_if_err {
     ($res: expr) => {
         if let Err(err) = $res {
@@ -102,6 +137,8 @@ fn main() {
             Some("undo") => chessboard.undo(),
             Some("evaluate") => println!("{}", chessboard.evaluate()),
             Some("state") => println!("{}", chessboard.state()),
+            Some("search") => search(&chessboard, tokens),
+            Some("play") => play(&mut chessboard, tokens),
             Some(cmd) => eprintln!("Error: Unknown command \"{}\"", cmd),
             None => continue,
         }

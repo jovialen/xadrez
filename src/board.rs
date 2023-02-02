@@ -199,8 +199,8 @@ impl Chessboard {
         self.position[m.to] = self.position[m.from];
         self.position[m.from] = None;
 
+        self.position.halftime += 1;
         if self.position.side_to_move == Side::Black {
-            self.position.halftime += 1;
             self.position.fulltime += 1;
         }
 
@@ -333,7 +333,16 @@ impl Chessboard {
     /// and return the advantage in approximate centi-pawns.
     #[must_use]
     pub fn evaluate_relative(&self) -> i32 {
-        evaluation::evaluate_position(&self.position)
+        let state = self.state();
+
+        if state == GameState::Playing {
+            evaluation::evaluate_position(&self.position)
+        } else if state == GameState::Checkmate {
+            -i32::MAX
+        } else {
+            // Its a draw
+            0
+        }
     }
 
     /// Perft move enumeration function.
