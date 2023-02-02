@@ -187,7 +187,8 @@ const BISHOP_MAGICS: [u64; BOARD_SIZE] = [
     0x4010_2000_a0a6_0140,
 ];
 
-struct PositionBitboards {
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct PositionBitboards {
     pieces: [[Bitboard; PIECE_KIND_COUNT]; SIDE_COUNT],
     sides: [Bitboard; SIDE_COUNT],
     occupied: Bitboard,
@@ -215,19 +216,24 @@ struct Magic {
     shift: usize,
 }
 
-pub(crate) fn generate_legal_moves(position: &Position) -> Vec<Move> {
-    let pb = PositionBitboards::new(position);
+pub(crate) fn generate_legal_moves(position: &Position, bb: &PositionBitboards) -> Vec<Move> {
+    let side = position.side_to_move;
     let mut result = Vec::with_capacity(150);
 
-    if pb.checkers.pop_count() < 2 {
-        generate_moves(PieceKind::Queen, &pb, position.side_to_move, &mut result);
-        generate_moves(PieceKind::Bishop, &pb, position.side_to_move, &mut result);
-        generate_moves(PieceKind::Knight, &pb, position.side_to_move, &mut result);
-        generate_moves(PieceKind::Rook, &pb, position.side_to_move, &mut result);
-        generate_pawn_moves(&pb, position.side_to_move, position.en_passant, &mut result);
+    // If the halftime clock has expired, the game is over
+    if position.halftime >= 50 {
+        return result;
     }
 
-    generate_king_moves(&pb, position.side_to_move, position.castling, &mut result);
+    if bb.count_checkers() < 2 {
+        generate_moves(PieceKind::Queen, bb, side, &mut result);
+        generate_moves(PieceKind::Bishop, bb, side, &mut result);
+        generate_moves(PieceKind::Knight, bb, side, &mut result);
+        generate_moves(PieceKind::Rook, bb, side, &mut result);
+        generate_pawn_moves(bb, side, position.en_passant, &mut result);
+    }
+
+    generate_king_moves(bb, side, position.castling, &mut result);
 
     result
 }
@@ -591,7 +597,7 @@ fn find_attacks_on_square(
 
 impl PositionBitboards {
     #[allow(clippy::enum_glob_use)]
-    fn new(position: &Position) -> Self {
+    pub fn new(position: &Position) -> Self {
         use crate::piece::PieceKind::*;
 
         let mut pb = Self::default();
@@ -660,6 +666,10 @@ impl PositionBitboards {
         );
 
         pb
+    }
+
+    pub fn count_checkers(&self) -> usize {
+        self.checkers.pop_count()
     }
 
     fn generate_checkmask(

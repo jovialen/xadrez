@@ -101,6 +101,7 @@ fn main() {
             Some("perft") => perft(&mut chessboard, tokens),
             Some("undo") => chessboard.undo(),
             Some("evaluate") => println!("{}", chessboard.evaluate()),
+            Some("state") => println!("{}", chessboard.state()),
             Some(cmd) => eprintln!("Error: Unknown command \"{}\"", cmd),
             None => continue,
         }

@@ -7,6 +7,7 @@ use crate::bitboards::constants::*;
 use crate::bitboards::Bitboard;
 use crate::error::{MoveError, ParseFenError};
 use crate::fen::{FenString, FEN_STARTING_POSITION};
+use crate::movegen::PositionBitboards;
 use crate::piece::{Piece, PieceKind, Side, SIDE_COUNT};
 use crate::r#move::{Move, MoveKind};
 use crate::{evaluation, movegen};
@@ -32,6 +33,7 @@ pub const BOARD_SIZE: usize = BOARD_FILES * BOARD_RANKS;
 #[derive(Clone, Debug, PartialEq)]
 pub struct Chessboard {
     position: Position,
+    bitboards: PositionBitboards,
     legal_moves: Vec<Move>,
     history: Vec<(Position, Vec<Move>)>,
 }
@@ -59,6 +61,26 @@ pub enum Square {
     A6, B6, C6, D6, E6, F6, G6, H6,
     A7, B7, C7, D7, E7, F7, G7, H7,
     A8, B8, C8, D8, E8, F8, G8, H8,
+}
+
+/// The possible states of the game.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GameState {
+    /// The side to move is in checkmate.
+    Checkmate,
+    /// A draw has been reached.
+    Draw(DrawReason),
+    /// The game is not finished.
+    Playing,
+}
+
+/// The reason for the draw.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DrawReason {
+    /// The side to move has no legal moves, but is not in check.
+    Stalemate,
+    /// No pawn has moved and no captures have occured in the last 50 moves.
+    Rule50,
 }
 
 #[derive(Clone, Copy, Debug, FromPrimitive, PartialEq, Eq)]
@@ -100,10 +122,13 @@ impl Chessboard {
     /// Can return a [`ParseFenError`] if the given FEN string is not valid.
     pub fn from_fen(fen: &str) -> Result<Self, ParseFenError> {
         let position = Position::from_str(fen)?;
+        let bitboards = PositionBitboards::new(&position);
+        let legal_moves = movegen::generate_legal_moves(&position, &bitboards);
 
         Ok(Self {
             position,
-            legal_moves: movegen::generate_legal_moves(&position),
+            bitboards,
+            legal_moves,
             history: Vec::new(),
         })
     }
@@ -120,7 +145,8 @@ impl Chessboard {
     pub fn set_position(&mut self, fen: &str) -> Result<(), ParseFenError> {
         self.save_current_to_history();
         self.position = Position::from_str(fen)?;
-        self.legal_moves = movegen::generate_legal_moves(&self.position);
+        self.bitboards = PositionBitboards::new(&self.position);
+        self.legal_moves = movegen::generate_legal_moves(&self.position, &self.bitboards);
         Ok(())
     }
 
@@ -252,7 +278,8 @@ impl Chessboard {
         self.position.side_to_move = !self.position.side_to_move;
 
         // Update legal moves
-        self.legal_moves = movegen::generate_legal_moves(&self.position);
+        self.bitboards = PositionBitboards::new(&self.position);
+        self.legal_moves = movegen::generate_legal_moves(&self.position, &self.bitboards);
 
         Ok(())
     }
@@ -263,6 +290,28 @@ impl Chessboard {
             self.position = last_pos;
             self.legal_moves = last_moves;
         }
+    }
+
+    /// Get the current state of the board.
+    #[must_use]
+    pub fn state(&self) -> GameState {
+        if self.position.halftime >= 50 {
+            GameState::Draw(DrawReason::Rule50)
+        } else if self.legal_moves.is_empty() {
+            if self.in_check() {
+                GameState::Checkmate
+            } else {
+                GameState::Draw(DrawReason::Stalemate)
+            }
+        } else {
+            GameState::Playing
+        }
+    }
+
+    /// Check if the side to move is currently in check.
+    #[must_use]
+    pub fn in_check(&self) -> bool {
+        self.bitboards.count_checkers() > 0
     }
 
     /// Evaluate the current position.
@@ -664,6 +713,24 @@ impl FromStr for Square {
 impl fmt::Display for Square {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{self:?}")
+    }
+}
+
+impl fmt::Display for GameState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Draw(reason) => write!(f, "Draw by {reason}"),
+            _ => write!(f, "{self:?}"),
+        }
+    }
+}
+
+impl fmt::Display for DrawReason {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::Stalemate => "stalemate",
+            Self::Rule50 => "50 move rule",
+        })
     }
 }
 
