@@ -645,7 +645,8 @@ impl PositionBitboards {
         }
 
         // Find pins and generate pinmask
-        let hv_pieces = pb.pieces[hostile][Rook as usize] | pb.pieces[hostile][Queen as usize];
+        let hv_pieces =
+            (pb.pieces[hostile][Rook as usize] | pb.pieces[hostile][Queen as usize]) & !pb.checkers;
         pb.pinmask_hv = Self::find_pins(
             Rook,
             side,
@@ -655,7 +656,8 @@ impl PositionBitboards {
             pb.occupied,
         );
 
-        let d12_pieces = pb.pieces[hostile][Bishop as usize] | pb.pieces[hostile][Queen as usize];
+        let d12_pieces = (pb.pieces[hostile][Bishop as usize] | pb.pieces[hostile][Queen as usize])
+            & !pb.checkers;
         pb.pinmask_d12 = Self::find_pins(
             Bishop,
             side,
@@ -938,6 +940,13 @@ mod tests {
             let fen = "8/8/2k5/5q2/5n2/8/5K2/8 b - - 0 1";
             let mut chessboard = Chessboard::from_fen(fen).unwrap();
             assert_eq!(chessboard.perft(4, false), 23527);
+        }
+
+        #[test]
+        fn perft_pinned_pawn_cant_capture() {
+            let fen = "1n4k1/6pp/4R3/8/2P5/5r2/5KPq/RN6 w - - 0 1";
+            let mut chessboard = Chessboard::from_fen(fen).unwrap();
+            assert_eq!(chessboard.perft(5, false), 1_727_013);
         }
     }
 
