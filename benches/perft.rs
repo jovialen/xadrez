@@ -24,11 +24,5 @@ fn perft_benchmark(c: &mut Criterion) {
     high_depth.finish();
 }
 
-fn nnue_eval_benchmark(c: &mut Criterion) {
-    let board = Chessboard::default();
-
-    c.bench_function("nnue-evaluation", |b| b.iter(|| board.evaluate()));
-}
-
-criterion_group!(benches, perft_benchmark, nnue_eval_benchmark);
+criterion_group!(benches, perft_benchmark);
 criterion_main!(benches);
