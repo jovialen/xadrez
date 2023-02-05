@@ -1,12 +1,14 @@
 use crate::board::Chessboard;
 use crate::r#move::{Move, MoveKind};
 
+/// Configurable move searcher for a [`Chessboard`].
 pub struct MoveSearcher {
     board: Chessboard,
     depth: Option<usize>,
 }
 
 impl MoveSearcher {
+    /// Create a new move searcher for the current position.
     #[must_use]
     pub fn new(board: &Chessboard) -> Self {
         Self {
@@ -15,12 +17,20 @@ impl MoveSearcher {
         }
     }
 
+    /// Set the max depth of the search.
+    ///
+    /// If no max depth is set, then the search will have no max depth at all.
+    ///
+    /// # Arguments
+    ///
+    /// * `depth` - Max depth to search to.
     #[must_use]
     pub fn max_depth(mut self, depth: usize) -> Self {
         self.depth = Some(depth);
         self
     }
 
+    /// Search for the best possible move.
     #[must_use]
     pub fn search(mut self) -> Option<Move> {
         let depth = self.depth.unwrap_or(usize::MAX).max(1);
