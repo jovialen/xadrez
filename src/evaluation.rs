@@ -1,6 +1,6 @@
-use crate::board::Position;
 use crate::piece::constants::{BLACK_KING, WHITE_KING};
 use crate::piece::{PieceKind, Side};
+use crate::position::Position;
 use binread::BinRead;
 use lazy_static::lazy_static;
 use nnue::stockfish::halfkp::{SfHalfKpFullModel, SfHalfKpState};
@@ -13,9 +13,7 @@ lazy_static! {
 
 pub(crate) fn evaluate_position(position: &Position) -> i32 {
     let mut state = create_state(position).expect("Cannot evaluate invalid position.");
-
     let side_to_move = nnue_side(position.side_to_move);
-
     state.activate(side_to_move)[0] / 16
 }
 

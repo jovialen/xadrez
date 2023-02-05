@@ -6,12 +6,11 @@
 use crate::bitboards::constants::*;
 use crate::bitboards::Bitboard;
 use crate::error::{MoveError, ParseFenError};
-use crate::fen::{FenString, FEN_STARTING_POSITION};
-use crate::movegen::PositionBitboards;
+use crate::fen::FEN_STARTING_POSITION;
 use crate::piece::{Piece, PieceKind, Side, SIDE_COUNT};
+use crate::position::{Position, PositionBitboards};
 use crate::r#move::{Move, MoveKind};
 use crate::{evaluation, movegen};
-use itertools::Itertools;
 use num_derive::FromPrimitive;
 use std::str::FromStr;
 use std::{fmt, ops};
@@ -36,16 +35,6 @@ pub struct Chessboard {
     bitboards: PositionBitboards,
     legal_moves: Vec<Move>,
     history: Vec<(Position, Vec<Move>)>,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) struct Position {
-    pub squares: [Option<Piece>; BOARD_SIZE],
-    pub side_to_move: Side,
-    pub castling: [[bool; 2]; SIDE_COUNT],
-    pub en_passant: Option<Square>,
-    pub halftime: u32,
-    pub fulltime: u32,
 }
 
 /// The squares on the chessboard.
@@ -122,7 +111,7 @@ impl Chessboard {
     /// Can return a [`ParseFenError`] if the given FEN string is not valid.
     pub fn from_fen(fen: &str) -> Result<Self, ParseFenError> {
         let position = Position::from_str(fen)?;
-        let bitboards = PositionBitboards::new(&position);
+        let bitboards = position.bitboards();
         let legal_moves = movegen::generate_legal_moves(&position, &bitboards);
 
         Ok(Self {
@@ -145,7 +134,7 @@ impl Chessboard {
     pub fn set_position(&mut self, fen: &str) -> Result<(), ParseFenError> {
         self.save_current_to_history();
         self.position = Position::from_str(fen)?;
-        self.bitboards = PositionBitboards::new(&self.position);
+        self.bitboards = self.position.bitboards();
         self.legal_moves = movegen::generate_legal_moves(&self.position, &self.bitboards);
         Ok(())
     }
@@ -278,7 +267,7 @@ impl Chessboard {
         self.position.side_to_move = !self.position.side_to_move;
 
         // Update legal moves
-        self.bitboards = PositionBitboards::new(&self.position);
+        self.bitboards = self.position.bitboards();
         self.legal_moves = movegen::generate_legal_moves(&self.position, &self.bitboards);
 
         Ok(())
@@ -424,154 +413,17 @@ impl Default for Chessboard {
     }
 }
 
-impl fmt::Display for Chessboard {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.position.to_string().as_str())
-    }
-}
-
-impl Position {
-    pub fn pieces(&self) -> Vec<(Piece, Square)> {
-        self.squares
-            .iter()
-            .enumerate()
-            .filter_map(|(i, &option)| Some((option?, Square::try_from(i).ok()?)))
-            .collect()
-    }
-}
-
-impl ops::Index<Square> for Position {
+impl ops::Index<Square> for Chessboard {
     type Output = Option<Piece>;
 
     fn index(&self, index: Square) -> &Self::Output {
-        &self.squares[index as usize]
+        &self.position[index]
     }
 }
 
-impl ops::IndexMut<Square> for Position {
-    fn index_mut(&mut self, index: Square) -> &mut Self::Output {
-        &mut self.squares[index as usize]
-    }
-}
-
-impl FromStr for Position {
-    type Err = ParseFenError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.is_empty() {
-            return Err(ParseFenError::Empty);
-        }
-
-        let fen = FenString::try_from(s)?;
-
-        let mut squares = [None; BOARD_SIZE];
-
-        let mut i = 0;
-        for rank in fen.squares.split('/').rev() {
-            for piece in rank.chars() {
-                squares[i] = match piece {
-                    '1'..='8' => {
-                        // Safety: Already validated that the char is a valid digit.
-                        i += piece.to_digit(10).unwrap() as usize - 1;
-                        None
-                    }
-                    _ => Some(Piece::try_from(piece)?),
-                };
-                i += 1;
-            }
-        }
-
-        if i != BOARD_SIZE {
-            return Err(ParseFenError::InvalidBoardSize);
-        }
-
-        let side_to_move = Side::from(fen.side_to_move);
-
-        let mut castling = [[false; 2]; SIDE_COUNT];
-        for p in fen
-            .castling_ability
-            .chars()
-            .filter_map(|c| Piece::try_from(c).ok())
-            .filter(|piece| piece.kind == PieceKind::King || piece.kind == PieceKind::Queen)
-        {
-            castling[p.side as usize][p.kind as usize] = true;
-        }
-
-        let en_passant = match fen.en_passant_target_square {
-            "-" => None,
-            target => Some(Square::from_str(target)?),
-        };
-        let halftime = fen.halftime.parse()?;
-        let fulltime = fen.fulltime.parse()?;
-
-        Ok(Self {
-            squares,
-            side_to_move,
-            castling,
-            en_passant,
-            halftime,
-            fulltime,
-        })
-    }
-}
-
-impl fmt::Display for Position {
+impl fmt::Display for Chessboard {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for (i, slice) in self.squares.chunks_exact(BOARD_FILES).rev().enumerate() {
-            if i != 0 {
-                write!(f, "/")?;
-            }
-
-            for (key, group) in &slice.iter().group_by(|piece| piece.is_some()) {
-                if key {
-                    for piece in group {
-                        // Safety: If the key is true, the options are all Some
-                        write!(f, "{}", piece.unwrap())?;
-                    }
-                } else {
-                    write!(f, "{}", group.count())?;
-                }
-            }
-        }
-
-        write!(f, " {}", self.side_to_move)?;
-
-        write!(
-            f,
-            " {}",
-            if self.castling.iter().flatten().any(|castling| *castling) {
-                self.castling
-                    .iter()
-                    .flatten()
-                    .enumerate()
-                    .filter(|(_, castling)| **castling)
-                    .fold(String::new(), |acc, (i, _)| {
-                        acc + match i {
-                            0 => "K",
-                            1 => "Q",
-                            2 => "k",
-                            3 => "q",
-                            _ => unreachable!(),
-                        }
-                    })
-            } else {
-                "-".to_string()
-            }
-        )?;
-
-        write!(
-            f,
-            " {}",
-            match self.en_passant {
-                Some(square) => square.to_string().to_lowercase(),
-                None => "-".to_string(),
-            }
-        )?;
-
-        write!(f, " {}", self.halftime)?;
-        write!(f, " {}", self.fulltime)?;
-
-        Ok(())
+        f.write_str(self.position.to_string().as_str())
     }
 }
 
