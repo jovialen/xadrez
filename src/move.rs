@@ -12,7 +12,7 @@ use std::str::FromStr;
 ///
 /// There is no guarantee that the move is legal, so the move should be
 /// validated before it is used.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq)]
 pub struct Move {
     /// The origin square of the move.
     pub from: Square,

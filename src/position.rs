@@ -7,10 +7,20 @@ use crate::fen::FenString;
 use crate::movegen;
 use crate::piece::{Piece, PieceKind, Side, PIECE_KIND_COUNT, SIDE_COUNT};
 use itertools::Itertools;
+use lazy_static::lazy_static;
+use std::hash::Hash;
 use std::str::FromStr;
 use std::{fmt, ops};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+lazy_static! {
+    static ref ZOBRIST_PIECE_NUMS: [u64; BOARD_SIZE * PIECE_KIND_COUNT * 2] =
+        init_rand_nums::<u64, { BOARD_SIZE * PIECE_KIND_COUNT * 2 }>();
+    static ref ZOBRIST_BLACK_MOVE: u64 = rand::random::<u64>();
+    static ref ZOBRIST_CASTLING: [u64; 4] = init_rand_nums::<u64, 4>();
+    static ref ZOBRIST_EN_PASSANT: [u64; BOARD_FILES] = init_rand_nums::<u64, BOARD_FILES>();
+}
+
+#[derive(Clone, Copy, Debug, Eq)]
 pub(crate) struct Position {
     pub squares: [Option<Piece>; BOARD_SIZE],
     pub side_to_move: Side,
@@ -20,7 +30,7 @@ pub(crate) struct Position {
     pub fulltime: u32,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct PositionBitboards {
     pub pieces: [[Bitboard; PIECE_KIND_COUNT]; SIDE_COUNT],
     pub sides: [Bitboard; SIDE_COUNT],
@@ -32,6 +42,19 @@ pub(crate) struct PositionBitboards {
     pub pinmask_d12: Bitboard,
     pub attacks: Bitboard,
     pub king_danger_squares: Bitboard,
+}
+
+fn init_rand_nums<T, const SIZE: usize>() -> [T; SIZE]
+where
+    T: Default + Clone + Copy + From<u64>,
+{
+    let mut result = [T::default(); SIZE];
+
+    for v in result.iter_mut() {
+        *v = T::from(rand::random::<u64>());
+    }
+
+    result
 }
 
 impl Position {
@@ -59,6 +82,48 @@ impl ops::Index<Square> for Position {
 impl ops::IndexMut<Square> for Position {
     fn index_mut(&mut self, index: Square) -> &mut Self::Output {
         &mut self.squares[index as usize]
+    }
+}
+
+impl PartialEq for Position {
+    fn eq(&self, other: &Self) -> bool {
+        self.squares == other.squares
+            && self.side_to_move == other.side_to_move
+            && self.castling == other.castling
+            && self.en_passant == other.en_passant
+            && self.halftime == other.halftime
+            && self.fulltime == other.fulltime
+    }
+}
+
+impl Hash for Position {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        let mut hash = 0;
+
+        for (square, content) in self.squares.iter().enumerate() {
+            if let Some(piece) = content {
+                let piece_id = piece.kind as usize + piece.side as usize * PIECE_KIND_COUNT;
+                let zobrist_id = square * (piece_id + 1);
+                hash ^= ZOBRIST_PIECE_NUMS[zobrist_id];
+            }
+        }
+
+        if self.side_to_move == Side::Black {
+            hash ^= *ZOBRIST_BLACK_MOVE;
+        }
+
+        for (i, castling) in self.castling.iter().flatten().enumerate() {
+            if *castling {
+                hash ^= ZOBRIST_CASTLING[i];
+            }
+        }
+
+        if let Some(square) = self.en_passant {
+            let (_, file) = square.to_rank_file();
+            hash ^= ZOBRIST_EN_PASSANT[file];
+        }
+
+        hash.hash(state);
     }
 }
 

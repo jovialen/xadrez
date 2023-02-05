@@ -29,10 +29,10 @@ pub const BOARD_RANKS: usize = 8;
 pub const BOARD_SIZE: usize = BOARD_FILES * BOARD_RANKS;
 
 /// Structure representing a chessboard.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Chessboard {
-    position: Position,
-    bitboards: PositionBitboards,
+    pub(crate) position: Position,
+    pub(crate) bitboards: PositionBitboards,
     legal_moves: Vec<Move>,
     history: Vec<(Position, Vec<Move>)>,
 }

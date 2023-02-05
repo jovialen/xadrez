@@ -31,7 +31,7 @@ pub(crate) mod constants {
     pub(crate) const BITBOARD_INNER: Bitboard = Bitboard(!0xFF81_8181_8181_81FF);
 }
 
-#[derive(Clone, Copy, Default, PartialEq)]
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct Bitboard(pub u64);
 
 impl Bitboard {

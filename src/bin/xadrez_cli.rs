@@ -3,6 +3,7 @@
 use itertools::Itertools;
 use std::io;
 use std::str::FromStr;
+use std::time::Duration;
 use xadrez::board::{Chessboard, GameState, Square};
 use xadrez::error::ParseFenError;
 use xadrez::fen::FEN_STARTING_POSITION;
@@ -78,9 +79,14 @@ fn print_moves<'a, I: Iterator<Item = &'a str>>(board: &Chessboard, mut args: I)
 }
 
 fn search<'a, I: Iterator<Item = &'a str>>(board: &Chessboard, mut args: I) {
-    let depth = args.next().and_then(|x| x.parse().ok()).unwrap_or(1);
+    let time_ms = args.next().and_then(|x| x.parse().ok()).unwrap_or(1000);
+    let depth = args
+        .next()
+        .and_then(|x| x.parse().ok())
+        .unwrap_or(usize::MAX);
 
     let best = MoveSearcher::new(board)
+        .max_time(Duration::from_millis(time_ms))
         .max_depth(depth)
         .search()
         .expect("Failed to find a valid move");
@@ -90,7 +96,11 @@ fn search<'a, I: Iterator<Item = &'a str>>(board: &Chessboard, mut args: I) {
 
 fn play<'a, I: Iterator<Item = &'a str>>(board: &mut xadrez::board::Chessboard, mut args: I) {
     let rounds = args.next().and_then(|x| x.parse().ok()).unwrap_or(1);
-    let depth = args.next().and_then(|x| x.parse().ok()).unwrap_or(1);
+    let time_ms = args.next().and_then(|x| x.parse().ok()).unwrap_or(1000);
+    let depth = args
+        .next()
+        .and_then(|x| x.parse().ok())
+        .unwrap_or(usize::MAX);
 
     for _ in 0..rounds {
         if board.state() != GameState::Playing {
@@ -99,6 +109,7 @@ fn play<'a, I: Iterator<Item = &'a str>>(board: &mut xadrez::board::Chessboard, 
         }
 
         let best = MoveSearcher::new(board)
+            .max_time(Duration::from_millis(time_ms))
             .max_depth(depth)
             .search()
             .expect("Failed to find a valid move");

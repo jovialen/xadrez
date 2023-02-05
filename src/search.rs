@@ -1,10 +1,19 @@
+//! Move searching.
+//!
+//! This crate contains the implementation of the move search algorithm used to find the best
+//! possible move for a position.
+
 use crate::board::Chessboard;
+use crate::position::Position;
 use crate::r#move::{Move, MoveKind};
+use std::collections::HashMap;
+use std::time::{Duration, Instant};
 
 /// Configurable move searcher for a [`Chessboard`].
 pub struct MoveSearcher {
     board: Chessboard,
     depth: Option<usize>,
+    time: Option<Duration>,
 }
 
 impl MoveSearcher {
@@ -14,6 +23,7 @@ impl MoveSearcher {
         Self {
             board: board.clone(),
             depth: None,
+            time: None,
         }
     }
 
@@ -30,33 +40,105 @@ impl MoveSearcher {
         self
     }
 
+    /// Set the max time the search can take.
+    ///
+    /// If no max time is set, then the search will not stop after any time.
+    ///
+    /// # Arguments
+    ///
+    /// * `time` - Max length of the search.
+    #[must_use]
+    pub fn max_time(mut self, time: Duration) -> Self {
+        self.time = Some(time);
+        self
+    }
+
     /// Search for the best possible move.
     #[must_use]
     pub fn search(mut self) -> Option<Move> {
-        let depth = self.depth.unwrap_or(usize::MAX).max(1);
+        let max_depth = self.depth.unwrap_or(usize::MAX).max(1);
+        let start_time = Instant::now();
 
-        self.board
-            .moves()
-            .clone()
-            .into_iter()
-            .max_by_key(move |&m| {
+        let moves = self.board.moves().clone();
+        let mut scores = vec![0; moves.len()];
+
+        let mut best = None;
+        'search: for depth in 0..max_depth {
+            let (mut best_iteration_move, mut best_iteration_score) = (None, -i32::MAX);
+            let mut transposition = HashMap::new();
+
+            for (i, &m) in moves.iter().enumerate() {
                 self.board.make_move(m).expect("All moves should be legal");
-                let eval = -alpha_beta(&mut self.board, depth - 1, -i32::MAX, i32::MAX);
+                scores[i] = -mtdf(&mut self.board, &mut transposition, scores[i], depth);
                 self.board.undo();
-                eval
-            })
+
+                if scores[i] > best_iteration_score {
+                    best_iteration_score = scores[i];
+                    best_iteration_move = Some(m);
+                }
+
+                if let Some(max_time) = self.time {
+                    if start_time.elapsed() > max_time {
+                        break 'search;
+                    }
+                }
+            }
+
+            best = best_iteration_move;
+        }
+
+        best
     }
 }
 
-fn alpha_beta(board: &mut Chessboard, depth: usize, mut alpha: i32, beta: i32) -> i32 {
+fn mtdf(
+    board: &mut Chessboard,
+    transposition: &mut HashMap<Position, i32>,
+    mut f: i32,
+    depth: usize,
+) -> i32 {
     if depth == 0 {
-        return quiesce(board, -beta, -alpha);
+        return board.evaluate_relative();
+    }
+
+    let mut upper = i32::MAX;
+    let mut lower = -i32::MAX;
+
+    while lower < upper {
+        let beta = f.max(lower + 1);
+
+        f = -alpha_beta(board, transposition, depth, beta - 1, beta);
+
+        if f < beta {
+            upper = f;
+        } else {
+            lower = f;
+        }
+    }
+
+    f
+}
+
+fn alpha_beta(
+    board: &mut Chessboard,
+    transposition: &mut HashMap<Position, i32>,
+    depth: usize,
+    mut alpha: i32,
+    beta: i32,
+) -> i32 {
+    if let Some(value) = transposition.get(&board.position) {
+        return *value;
+    }
+
+    if depth == 0 {
+        return quiesce(board, transposition, -beta, -alpha);
     }
 
     let moves = board.moves().clone();
     for m in moves {
         board.make_move(m).expect("All moves should be legal");
-        let score = -alpha_beta(board, depth - 1, -beta, -alpha);
+        let score = -alpha_beta(board, transposition, depth - 1, -beta, -alpha);
+        transposition.insert(board.position, score);
         board.undo();
 
         if score >= beta {
@@ -68,7 +150,16 @@ fn alpha_beta(board: &mut Chessboard, depth: usize, mut alpha: i32, beta: i32) -
     alpha
 }
 
-fn quiesce(board: &mut Chessboard, mut alpha: i32, beta: i32) -> i32 {
+fn quiesce(
+    board: &mut Chessboard,
+    transposition: &mut HashMap<Position, i32>,
+    mut alpha: i32,
+    beta: i32,
+) -> i32 {
+    if let Some(score) = transposition.get(&board.position) {
+        return *score;
+    }
+
     let moves: Vec<_> = board
         .moves()
         .clone()
@@ -82,7 +173,7 @@ fn quiesce(board: &mut Chessboard, mut alpha: i32, beta: i32) -> i32 {
 
     for m in moves {
         board.make_move(m).expect("All moves should be legal");
-        let score = -quiesce(board, -beta, -alpha);
+        let score = -quiesce(board, transposition, -beta, -alpha);
         board.undo();
 
         if score >= beta {

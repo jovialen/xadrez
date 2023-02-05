@@ -27,6 +27,7 @@ itertools = "0.10.5"
 lazy_static = "1.4.0"
 nnue = { git = "https://github.com/analog-hors/nnue-rs" }
 binread = { version = "2", features = ["const_generics"] }
+rand = "0.8.5"
 
 [dev-dependencies]
 criterion = "0.4.0"
