@@ -16,6 +16,8 @@ xadrez = { git = "https://github.com/jovialen/xadrez" }
 
 ```rust
 use xadrez::prelude::*;
+use xadrez::search::MoveSearcher;
+use std::time::Duration;
 
 fn main() {
 	let chessboard = Chessboard::default();
@@ -32,6 +34,13 @@ fn main() {
 	chessboard.make_move(Move::from_str("e2e4"));
 
 	println!("{}", chessboard.evaluate());
+	
+	let best_move = MoveSearcher::new(&chessbboard)
+		.max_depth(10)
+		.max_time(Duration::from_secs(5))
+		.search()
+		.expect("Failed to find move");
+	chessboard.make_move(best_move);
 }
 ```
 
