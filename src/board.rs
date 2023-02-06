@@ -198,8 +198,8 @@ impl Chessboard {
         self.position[m.to] = self.position[m.from];
         self.position[m.from] = None;
 
-        self.position.halftime += 1;
         if self.position.side_to_move == Side::Black {
+            self.position.halftime += 1;
             self.position.fulltime += 1;
         }
 
@@ -335,7 +335,7 @@ impl Chessboard {
         let state = self.state();
 
         if state == GameState::Playing {
-            evaluation::evaluate_position(&self.position)
+            evaluation::evaluate_position(&self.position, &self.bitboards)
         } else if state == GameState::Checkmate {
             -i32::MAX
         } else {
@@ -592,7 +592,7 @@ impl Square {
 
     /// Get the rank and file of the square.
     #[must_use]
-    pub fn to_rank_file(&self) -> (usize, usize) {
+    pub const fn to_rank_file(&self) -> (usize, usize) {
         let rank = *self as usize / BOARD_FILES;
         let file = *self as usize % BOARD_FILES;
         (rank, file)

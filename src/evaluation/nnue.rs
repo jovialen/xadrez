@@ -11,7 +11,7 @@ lazy_static! {
         create_evaluator(include_bytes!("nn-62ef826d1a6d.nnue"));
 }
 
-pub(crate) fn evaluate_position(position: &Position) -> i32 {
+pub(super) fn nnue_evaluation(position: &Position) -> i32 {
     let mut state = create_state(position).expect("Cannot evaluate invalid position.");
     let side_to_move = nnue_side(position.side_to_move);
     state.activate(side_to_move)[0] / 16

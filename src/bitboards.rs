@@ -95,7 +95,7 @@ impl Bitboard {
         self.pop_lsb().and_then(|i| Square::try_from(i).ok())
     }
 
-    pub fn pop_count(self) -> usize {
+    pub const fn pop_count(self) -> usize {
         self.0.count_ones() as usize
     }
 }

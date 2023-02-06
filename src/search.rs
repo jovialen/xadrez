@@ -1,7 +1,7 @@
 //! Move searching.
 //!
-//! This crate contains the implementation of the move search algorithm used to find the best
-//! possible move for a position.
+//! This crate contains the implementation of the move search algorithm used to
+//! find the best possible move for a position.
 
 use crate::board::Chessboard;
 use crate::position::Position;
@@ -84,6 +84,7 @@ impl MoveSearcher {
                 }
             }
 
+            println!("{depth}");
             best = best_iteration_move;
         }
 
@@ -98,7 +99,7 @@ fn mtdf(
     depth: usize,
 ) -> i32 {
     if depth == 0 {
-        return board.evaluate_relative();
+        return quiesce(board, transposition, -i32::MAX, i32::MAX);
     }
 
     let mut upper = i32::MAX;
