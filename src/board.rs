@@ -8,7 +8,7 @@ use crate::bitboards::Bitboard;
 use crate::error::{MoveError, ParseFenError};
 use crate::fen::FEN_STARTING_POSITION;
 use crate::piece::{Piece, PieceKind, Side, SIDE_COUNT};
-use crate::position::{Position, PositionBitboards};
+use crate::position::{Position, PositionBitboards, EMPTY_POSITION};
 use crate::r#move::{Move, MoveKind};
 use crate::{evaluation, movegen};
 use num_derive::FromPrimitive;
@@ -29,12 +29,22 @@ pub const BOARD_RANKS: usize = 8;
 pub const BOARD_SIZE: usize = BOARD_FILES * BOARD_RANKS;
 
 /// Structure representing a chessboard.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Chessboard {
     pub(crate) position: Position,
     pub(crate) bitboards: PositionBitboards,
     legal_moves: Vec<Move>,
     history: Vec<(Position, Vec<Move>)>,
+}
+
+/// Chessboard builder.
+///
+/// This structure allows you to build a position without worrying about the
+/// legality of it untill it is built.
+#[allow(clippy::module_name_repetitions)]
+#[derive(Clone)]
+pub struct BoardBuilder {
+    position: Position,
 }
 
 /// The squares on the chessboard.
@@ -421,9 +431,136 @@ impl ops::Index<Square> for Chessboard {
     }
 }
 
+impl FromStr for Chessboard {
+    type Err = ParseFenError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::from_fen(s)
+    }
+}
+
 impl fmt::Display for Chessboard {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.position.to_string().as_str())
+    }
+}
+
+impl BoardBuilder {
+    /// Create a new board builder.
+    ///
+    /// The board will by default be completly empty, with no pieces on the
+    /// board, no time elapsed, and no castling rights.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            position: EMPTY_POSITION,
+        }
+    }
+
+    /// Build the Chessboard.
+    ///
+    /// # Errors
+    ///
+    /// Can return a [`ParseFenError`] if the position in the builder is not
+    /// legal.
+    pub fn build(self) -> Result<Chessboard, ParseFenError> {
+        let fen = self.position.to_string();
+        Chessboard::from_str(fen.as_str())
+    }
+
+    /// Set a piece on the board.
+    ///
+    /// No pieces are placed on the board by default.
+    ///
+    /// # Arguments
+    ///
+    /// * `square` - Where to place the piece.
+    /// * `piece` - The piece on the square.
+    #[must_use]
+    pub fn piece(mut self, square: Square, piece: Piece) -> Self {
+        self.position[square] = Some(piece);
+        self
+    }
+
+    /// Set the side to move.
+    ///
+    /// Initially set to white.
+    ///
+    /// # Arguments
+    ///
+    /// * `side` - The side to make a move.
+    #[must_use]
+    pub fn side_to_move(mut self, side: Side) -> Self {
+        self.position.side_to_move = side;
+        self
+    }
+
+    /// Set castling rights.
+    ///
+    /// Initially neither side has any castling rights, even if both the king
+    /// and rooks are in position.
+    ///
+    /// # Arguments
+    ///
+    /// * `side` - The side to set the castling right for.
+    /// * `kingside` - `true` for kingside castling, `false` for queenside
+    ///   castling.
+    /// * `allowed` - Whether or not to allow castling.
+    #[must_use]
+    pub fn castling(mut self, side: Side, kingside: bool, allowed: bool) -> Self {
+        let i = if kingside {
+            PieceKind::King as usize
+        } else {
+            PieceKind::Queen as usize
+        };
+
+        self.position.castling[side as usize][i] = allowed;
+        self
+    }
+
+    /// Set the en passant square.
+    ///
+    /// If not set explicitly here, no en passant square will be set at all.
+    ///
+    /// # Arguments
+    ///
+    /// * `target_square` - The en passant square.
+    #[must_use]
+    pub fn en_passant(mut self, target_square: Square) -> Self {
+        self.position.en_passant = Some(target_square);
+        self
+    }
+
+    /// Set the halftime.
+    ///
+    /// This has an initial value of 0.
+    ///
+    /// # Arguments
+    ///
+    /// * `halftime` - Moves since last capture or pawn push.
+    #[must_use]
+    pub fn halftime(mut self, halftime: u32) -> Self {
+        self.position.halftime = halftime;
+        self
+    }
+
+    /// Set the fulltime.
+    ///
+    /// This has an initial value of 1.
+    ///
+    /// # Arguments
+    ///
+    /// * `fulltime` - Moves since the start of the game.
+    #[must_use]
+    pub fn fulltime(mut self, fulltime: u32) -> Self {
+        self.position.fulltime = fulltime;
+        self
+    }
+}
+
+impl Default for BoardBuilder {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -615,6 +752,8 @@ impl Direction {
 mod tests {
     use super::*;
     use crate::fen::FEN_EMPTY_POSITION;
+    #[allow(clippy::wildcard_imports)]
+    use crate::piece::constants::*;
 
     fn test_fen(fen: &str, err: Result<(), ParseFenError>) {
         let chessboard = Chessboard::from_fen(fen);
@@ -626,7 +765,7 @@ mod tests {
     }
 
     #[test]
-    fn fen_parsing() {
+    fn test_fen_parsing() {
         test_fen(FEN_STARTING_POSITION, Ok(()));
         test_fen(FEN_EMPTY_POSITION, Err(ParseFenError::MissingKing));
         test_fen("8/5k2/3p4/1p1Pp2p/pP2Pp1P/P4P1K/8/8 b - - 99 50", Ok(()));
@@ -638,10 +777,58 @@ mod tests {
             Ok(()),
         );
         test_fen("6k1/pppp1ppp/8/4p3/8/7P/PPPPPPP1/4K3 w - e6 0 13", Ok(()));
+        test_fen(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBN1 w Qkq - 0 1",
+            Ok(()),
+        );
+        test_fen(
+            "1nbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/1NBQKBN1 w k - 0 1",
+            Ok(()),
+        );
+        test_fen(
+            "1nbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/1NBQKBN1 w KQq - 0 1",
+            Err(ParseFenError::IllegalCastling),
+        );
     }
 
     #[test]
-    fn neighbour_squares() {
+    fn test_board_building() {
+        let board = BoardBuilder::new()
+            .piece(Square::A1, WHITE_ROOK)
+            .piece(Square::H1, WHITE_ROOK)
+            .piece(Square::B1, WHITE_KNIGHT)
+            .piece(Square::G1, WHITE_KNIGHT)
+            .piece(Square::C1, WHITE_BISHOP)
+            .piece(Square::F1, WHITE_BISHOP)
+            .build();
+        assert_eq!(board, Err(ParseFenError::MissingKing));
+
+        let board = BoardBuilder::new()
+            .piece(Square::E1, WHITE_KING)
+            .piece(Square::E8, BLACK_KING)
+            .side_to_move(Side::Black)
+            .halftime(10)
+            .fulltime(11)
+            .build();
+        assert_eq!(
+            board.map(|board| board.to_string()),
+            Ok(String::from("4k3/8/8/8/8/8/8/4K3 b - - 10 11"))
+        );
+
+        let board = BoardBuilder::new()
+            .piece(Square::E1, WHITE_KING)
+            .piece(Square::E8, BLACK_KING)
+            .piece(Square::A1, WHITE_ROOK)
+            .castling(Side::White, false, true)
+            .build();
+        assert_eq!(
+            board.map(|board| board.to_string()),
+            Ok(String::from("4k3/8/8/8/8/8/8/R3K3 w Q - 0 1"))
+        );
+    }
+
+    #[test]
+    fn test_neighbour_squares() {
         assert_eq!(Square::A1.neighbour(Direction::North), Some(Square::A2));
         assert_eq!(Square::A2.neighbour(Direction::South), Some(Square::A1));
         assert_eq!(Square::A1.neighbour(Direction::East), Some(Square::B1));

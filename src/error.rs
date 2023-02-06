@@ -25,6 +25,9 @@ pub enum ParseFenError {
     InvalidSquare,
     /// No piece represented by the given char.
     InvalidPiece,
+    /// Castling rights given when either the king or the rook aren't correctly
+    /// positioned.
+    IllegalCastling,
     /// Failed to parse either the fulltime or halftime clock.
     ParseClockError(ParseIntError),
     /// The input was empty.
@@ -71,6 +74,7 @@ impl fmt::Display for ParseFenError {
             Self::MissingKing => "missing king in position",
             Self::InvalidSquare => "invalid square notation",
             Self::InvalidPiece => "unknown piece",
+            Self::IllegalCastling => "castling allowed for incorrectly positioned king and rook",
             Self::ParseClockError(_) => "failed to parse clock field",
             Self::Empty => "empty FEN string",
         })

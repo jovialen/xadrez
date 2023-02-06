@@ -19,6 +19,15 @@ lazy_static! {
     static ref ZOBRIST_EN_PASSANT: [u64; BOARD_FILES] = init_rand_nums::<u64, BOARD_FILES>();
 }
 
+pub(crate) const EMPTY_POSITION: Position = Position {
+    squares: [None; BOARD_SIZE],
+    side_to_move: Side::White,
+    castling: [[false; 2]; SIDE_COUNT],
+    en_passant: None,
+    halftime: 0,
+    fulltime: 1,
+};
+
 #[derive(Clone, Copy, Debug, Eq)]
 pub(crate) struct Position {
     pub squares: [Option<Piece>; BOARD_SIZE],
@@ -180,6 +189,23 @@ impl FromStr for Position {
             .filter_map(|c| Piece::try_from(c).ok())
             .filter(|piece| piece.kind == PieceKind::King || piece.kind == PieceKind::Queen)
         {
+            let rank = if p.side == Side::White { 0 } else { 7 } * BOARD_FILES;
+            let file = if p.kind == PieceKind::King { 7 } else { 0 };
+
+            if squares[rank + Square::E1 as usize]
+                != Some(Piece {
+                    kind: PieceKind::King,
+                    side: p.side,
+                })
+                || squares[rank + file]
+                    != Some(Piece {
+                        kind: PieceKind::Rook,
+                        side: p.side,
+                    })
+            {
+                return Err(ParseFenError::IllegalCastling);
+            }
+
             castling[p.side as usize][p.kind as usize] = true;
         }
 
