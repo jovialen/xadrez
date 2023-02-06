@@ -1,6 +1,6 @@
 //! HCE evaluation mainly written based on Stockfishs evaluation guide.
 //!
-//! https://hxim.github.io/Stockfish-Evaluation-Guide/
+//! <https://hxim.github.io/Stockfish-Evaluation-Guide/>
 
 use crate::bitboards::Bitboard;
 use crate::board::{Direction, Square, BOARD_FILES, BOARD_RANKS};
@@ -146,6 +146,7 @@ const KNIGHT: usize = PieceKind::Knight as usize;
 const BISHOP: usize = PieceKind::Bishop as usize;
 const QUEEN: usize = PieceKind::Queen as usize;
 
+#[allow(clippy::cast_lossless, clippy::cast_possible_truncation)]
 pub(super) fn hce_evaluation(position: &Position, bb: &PositionBitboards) -> i32 {
     let early_game = game_evaluation(position, bb, false);
     let mut end_game = game_evaluation(position, bb, true) as f64;
@@ -168,6 +169,7 @@ fn game_evaluation(position: &Position, bb: &PositionBitboards, end_game: bool) 
 }
 
 #[inline]
+#[allow(clippy::cast_lossless)]
 fn phase(bb: &PositionBitboards) -> f64 {
     const EARLY_GAME_LIMIT: f64 = 15258.0;
     const END_GAME_LIMIT: f64 = 3915.0;
@@ -179,6 +181,7 @@ fn phase(bb: &PositionBitboards) -> f64 {
 }
 
 #[inline]
+#[allow(clippy::cast_lossless)]
 fn rule50(position: &Position) -> f64 {
     position.halftime as f64 * 2.0
 }
@@ -192,6 +195,7 @@ fn scale_factor(position: &Position, bb: &PositionBitboards, end_game: f64) -> f
     }
 }
 
+#[allow(clippy::cast_precision_loss)]
 fn scale_factor_for_side(side: Side, position: &Position, bb: &PositionBitboards) -> f64 {
     const EARLY_GAME_BISHOP_VALUE: i32 = EARLY_GAME_VALUES[BISHOP];
     const EARLY_GAME_ROOK_VALUE: i32 = EARLY_GAME_VALUES[ROOK];
@@ -246,8 +250,7 @@ fn scale_factor_for_side(side: Side, position: &Position, bb: &PositionBitboards
                                 side: Side::White,
                             })
                         {
-                            let i = if file < 4 { 1 } else { 0 };
-
+                            let i = usize::from(file < 4);
                             pcf_flank[i] = 1;
                         } else if position[square]
                             == Some(Piece {
@@ -294,6 +297,7 @@ const fn tempo() -> f64 {
 }
 
 #[inline]
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 const fn total_material(bb: &PositionBitboards, side: Side, end_game: bool) -> i32 {
     let friendly = side as usize;
 
@@ -305,6 +309,7 @@ const fn total_material(bb: &PositionBitboards, side: Side, end_game: bool) -> i
 }
 
 #[inline]
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 const fn non_pawn_material(bb: &PositionBitboards, side: Side) -> i32 {
     let friendly = side as usize;
 
@@ -335,6 +340,7 @@ fn total_psqt(position: &Position, side: Side, end_game: bool) -> i32 {
         })
 }
 
+#[allow(clippy::cast_precision_loss)]
 fn candidate_passed(side: Side, position: &Position, bb: &PositionBitboards) -> f64 {
     position
         .squares
@@ -365,7 +371,7 @@ fn is_candidate(side: Side, square: Square, bb: &PositionBitboards) -> bool {
             square.neighbour(Direction::East),
         ]
         .into_iter()
-        .filter_map(|neighbour| neighbour)
+        .flatten()
         .fold(Bitboard(0), |acc, square| acc | square.file());
 
         let mut passed_ranks = square.rank();
@@ -389,9 +395,7 @@ fn passed_defence(side: Side, mut square: Square, bb: &PositionBitboards) -> boo
 
     let mut distance = 0;
     while let Some(next) = square.neighbour(side.forward()) {
-        if bb.pieces[friendly][PAWN].get(next) {
-            return false;
-        } else if bb.pieces[hostile][PAWN].get(next) {
+        if bb.pieces[friendly][PAWN].get(next) || bb.pieces[hostile][PAWN].get(next) {
             return false;
         }
 
@@ -442,24 +446,18 @@ const fn psqt(kind: PieceKind, side: Side, square: Square, end_game: bool) -> i3
         rank = BOARD_RANKS - (rank + 1);
     }
 
-    if !pawn {
-        if file >= 4 {
-            file = BOARD_FILES - (file + 1);
-        }
+    if !pawn && file >= 4 {
+        file = BOARD_FILES - (file + 1);
     }
 
-    if end_game {
-        if pawn {
-            END_GAME_PAWN_PSQT[rank][file]
-        } else {
-            END_GAME_PSQT[kind as usize][rank][file]
-        }
+    if end_game && pawn {
+        END_GAME_PAWN_PSQT[rank][file]
+    } else if end_game {
+        END_GAME_PSQT[kind as usize][rank][file]
+    } else if pawn {
+        EARLY_GAME_PAWN_PSQT[rank][file]
     } else {
-        if pawn {
-            EARLY_GAME_PAWN_PSQT[rank][file]
-        } else {
-            EARLY_GAME_PSQT[kind as usize][rank][file]
-        }
+        EARLY_GAME_PSQT[kind as usize][rank][file]
     }
 }
 
