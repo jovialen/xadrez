@@ -11,7 +11,7 @@ use std::fmt;
 use std::num::ParseIntError;
 
 /// An error which can be returned while parsing a FEN string.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ParseFenError {
     /// One or more fields are missing from the FEN string.
     MissingField,
@@ -19,6 +19,8 @@ pub enum ParseFenError {
     TrailingField,
     /// The FEN board representation is either too big or too small.
     InvalidBoardSize,
+    /// The board is missing at least one king.
+    MissingKing,
     /// Either the rank or file of the square was out of bounds.
     InvalidSquare,
     /// No piece represented by the given char.
@@ -30,7 +32,7 @@ pub enum ParseFenError {
 }
 
 /// An error which can be returned while parsing long algebraic notation.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ParseLANError {
     /// Either the to or from square was missing.
     MissingField,
@@ -46,7 +48,7 @@ pub enum ParseLANError {
 
 /// An error which can be returned when attempting to make a move on a
 /// [`Chessboard`].
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum MoveError {
     /// The move was not legal.
     IllegalMove,
@@ -66,6 +68,7 @@ impl fmt::Display for ParseFenError {
             Self::MissingField => "one or more fields are missing from the FEN string",
             Self::TrailingField => "there are one or more trailing fields in the FEN string",
             Self::InvalidBoardSize => "FEN position is formatted incorrectly",
+            Self::MissingKing => "missing king in position",
             Self::InvalidSquare => "invalid square notation",
             Self::InvalidPiece => "unknown piece",
             Self::ParseClockError(_) => "failed to parse clock field",

@@ -1,7 +1,6 @@
 use crate::bitboards::constants::BITBOARD_ALL;
 use crate::bitboards::Bitboard;
-use crate::board::BOARD_FILES;
-use crate::board::{Square, BOARD_SIZE};
+use crate::board::{Square, BOARD_FILES, BOARD_SIZE};
 use crate::error::ParseFenError;
 use crate::fen::FenString;
 use crate::movegen;
@@ -139,6 +138,7 @@ impl FromStr for Position {
 
         let mut squares = [None; BOARD_SIZE];
 
+        let mut kings = [false, false];
         let mut i = 0;
         for rank in fen.squares.split('/').rev() {
             for piece in rank.chars() {
@@ -150,12 +150,25 @@ impl FromStr for Position {
                     }
                     _ => Some(Piece::try_from(piece)?),
                 };
+
+                if let Some(Piece {
+                    kind: PieceKind::King,
+                    side,
+                }) = squares[i]
+                {
+                    kings[side as usize] = true;
+                }
+
                 i += 1;
             }
         }
 
         if i != BOARD_SIZE {
             return Err(ParseFenError::InvalidBoardSize);
+        }
+
+        if !kings[0] || !kings[1] {
+            return Err(ParseFenError::MissingKing);
         }
 
         let side_to_move = Side::from(fen.side_to_move);
