@@ -131,7 +131,7 @@ fn alpha_beta(
     }
 
     if depth == 0 {
-        return quiesce(board, transposition, -beta, -alpha);
+        return quiesce(board, transposition, alpha, beta);
     }
 
     let moves = board.moves().clone();
