@@ -84,7 +84,6 @@ impl MoveSearcher {
                 }
             }
 
-            println!("{depth}");
             best = best_iteration_move;
         }
 
@@ -175,6 +174,7 @@ fn quiesce(
     for m in moves {
         board.make_move(m).expect("All moves should be legal");
         let score = -quiesce(board, transposition, -beta, -alpha);
+        transposition.insert(board.position, score);
         board.undo();
 
         if score >= beta {
