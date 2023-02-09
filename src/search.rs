@@ -69,7 +69,7 @@ impl MoveSearcher {
 
             for (i, &m) in moves.iter().enumerate() {
                 self.board.make_move(m).expect("All moves should be legal");
-                scores[i] = -mtdf(&mut self.board, &mut transposition, scores[i], depth);
+                scores[i] = -mtdf(&mut self.board, &mut transposition, -scores[i], depth);
                 self.board.undo();
 
                 if scores[i] > best_iteration_score {
@@ -97,17 +97,14 @@ fn mtdf(
     mut f: i32,
     depth: usize,
 ) -> i32 {
-    if depth == 0 {
-        return quiesce(board, transposition, -i32::MAX, i32::MAX);
-    }
-
     let mut upper = i32::MAX;
     let mut lower = -i32::MAX;
 
     while lower < upper {
         let beta = f.max(lower + 1);
+        let alpha = beta - 1;
 
-        f = -alpha_beta(board, transposition, depth, beta - 1, beta);
+        f = alpha_beta(board, transposition, depth, alpha, beta);
 
         if f < beta {
             upper = f;
@@ -160,6 +157,12 @@ fn quiesce(
         return *score;
     }
 
+    let evaluation = board.evaluate_relative();
+    if evaluation >= beta {
+        return beta;
+    }
+    alpha = alpha.max(evaluation);
+
     let moves: Vec<_> = board
         .moves()
         .clone()
@@ -168,7 +171,7 @@ fn quiesce(
         .collect();
 
     if moves.is_empty() {
-        return board.evaluate_relative();
+        return evaluation;
     }
 
     for m in moves {
