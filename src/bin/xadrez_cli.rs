@@ -85,13 +85,16 @@ fn search<'a, I: Iterator<Item = &'a str>>(board: &Chessboard, mut args: I) {
         .and_then(|x| x.parse().ok())
         .unwrap_or(usize::MAX);
 
-    let best = MoveSearcher::new(board)
+    if let Some(best) = MoveSearcher::new(board)
         .max_time(Duration::from_millis(time_ms))
         .max_depth(depth)
+        .debug(true)
         .search()
-        .expect("Failed to find a valid move");
-
-    println!("Best move: {best}");
+    {
+        println!("Best move: {best}");
+    } else {
+        println!("Failed to find a move. Try giving more time to search.");
+    }
 }
 
 fn play<'a, I: Iterator<Item = &'a str>>(board: &mut xadrez::board::Chessboard, mut args: I) {
@@ -108,17 +111,20 @@ fn play<'a, I: Iterator<Item = &'a str>>(board: &mut xadrez::board::Chessboard, 
             return;
         }
 
-        let best = MoveSearcher::new(board)
+        if let Some(best) = MoveSearcher::new(board)
             .max_time(Duration::from_millis(time_ms))
             .max_depth(depth)
             .search()
-            .expect("Failed to find a valid move");
+        {
+            println!("{best}");
 
-        println!("{best}");
-
-        board
-            .make_move(best)
-            .expect("All found moves should be valid");
+            board
+                .make_move(best)
+                .expect("All found moves should be valid");
+        } else {
+            println!("Can't make a move. {}", board.state());
+            return;
+        }
     }
 }
 
