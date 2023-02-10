@@ -21,6 +21,27 @@ pub struct MoveSearcher {
     transposition: HashMap<Position, i32>,
 }
 
+/// Output data from a move search with the [`MoveSearcher::search`].
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[allow(clippy::module_name_repetitions)]
+pub struct SearchData {
+    /// The best move found in the search.
+    ///
+    /// Will be [`None`] if no move is found.
+    pub best_move: Option<Move>,
+    /// The score given to the best move.
+    ///
+    /// The score is the expected relative evaluation [`SearchData::depth`]
+    /// moves in the future.
+    pub score: i32,
+    /// How many moves into the future the search looked.
+    pub depth: usize,
+    /// When the search started.
+    pub start_time: Instant,
+    /// How long the search lasted.
+    pub duration: Duration,
+}
+
 impl MoveSearcher {
     /// Create a new move searcher for the current position.
     #[must_use]
@@ -75,14 +96,14 @@ impl MoveSearcher {
 
     /// Search for the best possible move.
     #[must_use]
-    pub fn search(mut self) -> Option<Move> {
+    pub fn search(mut self) -> SearchData {
         let max_depth = self.depth.unwrap_or(usize::MAX).max(1);
-        let start_time = Instant::now();
+
+        let mut result = SearchData::new();
 
         let moves = self.board.moves().clone();
         let mut scores = vec![0; moves.len()];
 
-        let mut best = None;
         'search: for depth in 0..max_depth {
             let (mut best_iteration_move, mut best_iteration_score) = (None, -i32::MAX);
             self.transposition.clear();
@@ -98,7 +119,7 @@ impl MoveSearcher {
                 }
 
                 if let Some(max_time) = self.time {
-                    if start_time.elapsed() > max_time {
+                    if result.start_time.elapsed() > max_time {
                         break 'search;
                     }
                 }
@@ -112,10 +133,14 @@ impl MoveSearcher {
                 );
             }
 
-            best = best_iteration_move;
+            result.best_move = best_iteration_move;
+            result.score = best_iteration_score;
+            result.depth = depth;
         }
 
-        best
+        result.duration = result.start_time.elapsed();
+
+        result
     }
 
     fn score_move(m: Move) -> i32 {
@@ -216,5 +241,17 @@ impl MoveSearcher {
         }
 
         alpha
+    }
+}
+
+impl SearchData {
+    pub(crate) fn new() -> Self {
+        Self {
+            best_move: None,
+            score: 0,
+            depth: 0,
+            start_time: Instant::now(),
+            duration: Duration::default(),
+        }
     }
 }

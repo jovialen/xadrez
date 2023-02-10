@@ -90,6 +90,7 @@ fn search<'a, I: Iterator<Item = &'a str>>(board: &Chessboard, mut args: I) {
         .max_depth(depth)
         .debug(true)
         .search()
+        .best_move
     {
         println!("Best move: {best}");
     } else {
@@ -115,6 +116,7 @@ fn play<'a, I: Iterator<Item = &'a str>>(board: &mut xadrez::board::Chessboard, 
             .max_time(Duration::from_millis(time_ms))
             .max_depth(depth)
             .search()
+            .best_move
         {
             println!("{best}");
 
