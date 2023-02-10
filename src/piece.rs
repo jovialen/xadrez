@@ -173,7 +173,6 @@ impl fmt::Display for Piece {
 }
 
 impl Side {
-    #[cfg(not(feature = "nnue"))]
     pub(crate) fn forward(self) -> Direction {
         match self {
             Self::White => Direction::North,

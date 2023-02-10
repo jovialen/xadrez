@@ -2,6 +2,8 @@
 //!
 //! <https://hxim.github.io/Stockfish-Evaluation-Guide/>
 
+#![cfg_attr(feature = "nnue", allow(dead_code))]
+
 use crate::bitboards::Bitboard;
 use crate::board::{Direction, Square, BOARD_FILES, BOARD_RANKS};
 use crate::movegen;
@@ -429,7 +431,7 @@ fn opposite_bishops(position: &Position, bb: &PositionBitboards) -> bool {
 }
 
 #[inline]
-const fn piece_value(kind: PieceKind, end_game: bool) -> i32 {
+pub(crate) const fn piece_value(kind: PieceKind, end_game: bool) -> i32 {
     if end_game {
         END_GAME_VALUES[kind as usize]
     } else {

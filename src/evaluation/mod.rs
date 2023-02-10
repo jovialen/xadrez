@@ -1,5 +1,4 @@
-#[cfg(not(feature = "nnue"))]
-mod hce;
+pub(crate) mod hce;
 #[cfg(feature = "nnue")]
 mod nnue;
 
