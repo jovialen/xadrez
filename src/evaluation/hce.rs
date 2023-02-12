@@ -217,6 +217,7 @@ fn game_evaluation(position: &Position, bb: &PositionBitboards, end_game: bool) 
     score += total_mobility(position, bb, side, end_game)
         - total_mobility(position, bb, !side, end_game);
     score += threats(position, bb, side, end_game) - threats(position, bb, !side, end_game);
+    score += space(bb, side, end_game) - space(bb, !side, end_game);
     score += king(position, bb, side, end_game) - king(position, bb, !side, end_game);
     score
 }
@@ -515,6 +516,43 @@ fn king(position: &Position, bb: &PositionBitboards, side: Side, end_game: bool)
     } else {
         king_early_game(position, bb, side)
     }
+}
+
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+fn space(bb: &PositionBitboards, side: Side, end_game: bool) -> i32 {
+    const SPACE_MASK: [Bitboard; SIDE_COUNT] = [
+        Bitboard(
+            BITBOARD_CENTER_FILES.0 & (BITBOARD_RANK_2.0 | BITBOARD_RANK_3.0 | BITBOARD_RANK_4.0),
+        ),
+        Bitboard(
+            BITBOARD_CENTER_FILES.0 & (BITBOARD_RANK_7.0 | BITBOARD_RANK_6.0 | BITBOARD_RANK_5.0),
+        ),
+    ];
+
+    if end_game || non_pawn_material(bb, side) + non_pawn_material(bb, !side) < 11551 {
+        return 0;
+    }
+
+    let friendly = side as usize;
+    let hostile = !side as usize;
+
+    let safe_squares =
+        SPACE_MASK[friendly] & !bb.pieces[friendly][PAWN] & !bb.attacked_by[hostile][PAWN];
+
+    let mut behind = bb.pieces[friendly][PAWN];
+    behind |= behind << side.backward().offset();
+    behind |= behind << (side.backward().offset() * 2);
+
+    let blocked_count = ((bb.pieces[friendly][PAWN] << side.forward().offset())
+        & bb.pieces[hostile][PAWN])
+        .pop_count();
+
+    let bonus =
+        safe_squares.pop_count() + (behind & safe_squares & !bb.attacked[hostile]).pop_count();
+    let weight = bb.sides[friendly].pop_count() - 3 + blocked_count.min(9);
+
+    let score = bonus * weight.pow(2) / 2;
+    score as i32
 }
 
 #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
