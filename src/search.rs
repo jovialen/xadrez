@@ -5,6 +5,7 @@
 
 use crate::board::Chessboard;
 use crate::evaluation;
+use crate::piece::PieceKind;
 use crate::position::Position;
 use crate::r#move::{Move, MoveKind};
 use itertools::Itertools;
@@ -154,15 +155,26 @@ impl MoveSearcher {
         result
     }
 
-    fn score_move(m: Move) -> i32 {
+    fn score_move(&self, m: Move) -> i32 {
+        let friendly = self.board.position.side_to_move as usize;
+        let hostile = 1 ^ friendly;
+
+        let piece = self.board.position[m.from].unwrap();
+
         let mut score = 0;
 
-        if matches!(m.kind, MoveKind::Capture | MoveKind::Promotion(_)) {
-            score += 100;
+        if let Some(capture) = self.board.position[m.to] {
+            let exchange = evaluation::hce::piece_value(capture.kind, false)
+                - evaluation::hce::piece_value(piece.kind, false);
+            score += 10 * exchange;
         }
 
         if let MoveKind::Promotion(to) = m.kind {
             score += evaluation::hce::piece_value(to, false);
+        }
+
+        if self.board.bitboards.attacked_by[hostile][PieceKind::Pawn as usize].get(m.to) {
+            score -= 350;
         }
 
         -score
@@ -197,7 +209,7 @@ impl MoveSearcher {
         }
 
         let mut moves = self.board.moves().clone();
-        moves.sort_by_key(|m| Self::score_move(*m));
+        moves.sort_by_key(|m| self.score_move(*m));
 
         for m in moves {
             self.board.make_move(m).expect("All moves should be legal");
@@ -231,7 +243,7 @@ impl MoveSearcher {
             .clone()
             .into_iter()
             .filter(|m| matches!(m.kind, MoveKind::Capture | MoveKind::Promotion(_)))
-            .sorted_by_key(|m| Self::score_move(*m))
+            .sorted_by_key(|m| self.score_move(*m))
             .collect();
 
         #[allow(clippy::cast_possible_wrap)]
