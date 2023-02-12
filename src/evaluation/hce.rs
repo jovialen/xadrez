@@ -216,6 +216,7 @@ fn game_evaluation(position: &Position, bb: &PositionBitboards, end_game: bool) 
     score += total_psqt(position, side, end_game) - total_psqt(position, !side, end_game);
     score += total_mobility(position, bb, side, end_game)
         - total_mobility(position, bb, !side, end_game);
+    score += threats(position, bb, side, end_game) - threats(position, bb, !side, end_game);
     score += king(position, bb, side, end_game) - king(position, bb, !side, end_game);
     score
 }
@@ -399,6 +400,113 @@ fn total_mobility(position: &Position, bb: &PositionBitboards, side: Side, end_g
         })
         .map(|(square, kind)| mobility_bonus(bb, kind, side, square, end_game))
         .sum()
+}
+
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+fn threats(position: &Position, bb: &PositionBitboards, side: Side, end_game: bool) -> i32 {
+    const PUSH_RANK: [Bitboard; SIDE_COUNT] = [BITBOARD_RANK_3, BITBOARD_RANK_6];
+
+    let friendly = side as usize;
+    let hostile = !side as usize;
+
+    let mut score = 0;
+
+    let non_pawn_hostile = bb.sides[hostile] & !bb.pieces[hostile][PAWN];
+    let strongly_protected =
+        bb.attacked_by[hostile][PAWN] | (bb.attacked_by_2[hostile] & !bb.attacked_by_2[friendly]);
+
+    let defended_hostile = non_pawn_hostile & strongly_protected;
+    let weak_hostile = bb.sides[hostile] & !strongly_protected & bb.attacked[friendly];
+
+    if defended_hostile | weak_hostile != 0 {
+        let mut attacked = (defended_hostile | weak_hostile)
+            & (bb.attacked_by[friendly][KNIGHT] | bb.attacked_by[friendly][BISHOP]);
+
+        while let Some(square) = attacked.pop_lsb_square() {
+            let kind = position[square].unwrap().kind;
+            score += minor_threat(kind, end_game);
+        }
+
+        attacked = weak_hostile & bb.attacked_by[friendly][ROOK];
+        while let Some(square) = attacked.pop_lsb_square() {
+            let kind = position[square].unwrap().kind;
+            score += rook_threat(kind, end_game);
+        }
+
+        if weak_hostile & bb.attacked_by[friendly][KING] != 0 && end_game {
+            score += 87;
+        } else if weak_hostile & bb.attacked_by[friendly][KING] != 0 {
+            score += 24;
+        }
+
+        attacked = !bb.attacked[hostile] | (non_pawn_hostile & bb.attacked_by_2[friendly]);
+        if end_game {
+            score += 69 * (weak_hostile & attacked).pop_count() as i32;
+            score += 14 * (weak_hostile & bb.attacked_by[hostile][QUEEN]).pop_count() as i32;
+        } else {
+            score += 89 * (weak_hostile & attacked).pop_count() as i32;
+        }
+    }
+
+    let attacked = bb.attacked[hostile] & !strongly_protected & bb.attacked[friendly];
+    score += 7 * attacked.pop_count() as i32;
+
+    let safe_squares = !bb.attacked[hostile] | bb.attacked[friendly];
+
+    let mut pawns = bb.pieces[friendly][PAWN] & safe_squares;
+    let mut safe_pawn_attacks = Bitboard(0);
+    while let Some(square) = pawns.pop_lsb_square() {
+        let pawn_push = movegen::get_attacks_bitboard(PieceKind::Pawn, side, square, bb.occupied);
+        safe_pawn_attacks |= pawn_push & non_pawn_hostile;
+    }
+
+    pawns = (bb.pieces[friendly][PAWN] << side.forward().offset()) & !bb.occupied;
+    pawns |= ((pawns & PUSH_RANK[friendly]) << side.forward().offset()) & !bb.occupied;
+    pawns &= !bb.attacked_by[hostile][PAWN] & safe_squares;
+
+    let mut safe_pawn_pushes = Bitboard(0);
+    while let Some(square) = pawns.pop_lsb_square() {
+        let pawn_push = movegen::get_attacks_bitboard(PieceKind::Pawn, side, square, bb.occupied);
+        safe_pawn_pushes |= pawn_push & non_pawn_hostile;
+    }
+
+    if end_game {
+        score += 99 * safe_pawn_attacks.pop_count() as i32;
+        score += 39 * safe_pawn_pushes.pop_count() as i32;
+    } else {
+        score += 167 * safe_pawn_attacks.pop_count() as i32;
+        score += 48 * safe_pawn_pushes.pop_count() as i32;
+    }
+
+    if bb.pieces[hostile][QUEEN].pop_count() == 1 {
+        let queen_imbalance =
+            i32::from((bb.pieces[hostile][QUEEN] | bb.pieces[friendly][QUEEN]).pop_count() == 1);
+
+        let queen_square = bb.pieces[hostile][QUEEN].lsb_square().unwrap();
+        let safe_squares =
+            mobility_area(bb, side) & !bb.pieces[friendly][PAWN] & !strongly_protected;
+
+        let knight_threat = bb.attacked_by[friendly][KNIGHT]
+            & movegen::get_attacks_bitboard(PieceKind::Knight, side, queen_square, bb.occupied)
+            & safe_squares;
+
+        let slider_threat = (bb.attacked_by[friendly][BISHOP]
+            & movegen::get_attacks_bitboard(PieceKind::Bishop, side, queen_square, bb.occupied))
+            | (bb.attacked_by[friendly][ROOK]
+                & movegen::get_attacks_bitboard(PieceKind::Rook, side, queen_square, bb.occupied))
+                & safe_squares
+                & bb.attacked_by_2[friendly];
+
+        if end_game {
+            score += 11 * knight_threat.pop_count() as i32 * (1 + queen_imbalance);
+            score += 21 * slider_threat.pop_count() as i32 * (1 + queen_imbalance);
+        } else {
+            score += 16 * knight_threat.pop_count() as i32 * (1 + queen_imbalance);
+            score += 62 * slider_threat.pop_count() as i32 * (1 + queen_imbalance);
+        }
+    }
+
+    score
 }
 
 fn king(position: &Position, bb: &PositionBitboards, side: Side, end_game: bool) -> i32 {
@@ -724,6 +832,30 @@ const fn psqt(kind: PieceKind, side: Side, square: Square, end_game: bool) -> i3
         EARLY_GAME_PAWN_PSQT[rank][file]
     } else {
         EARLY_GAME_PSQT[kind as usize][rank][file]
+    }
+}
+
+#[inline]
+const fn minor_threat(kind: PieceKind, end_game: bool) -> i32 {
+    const EARLY_GAME_THREAT_MINOR: [i32; PIECE_KIND_COUNT] = [0, 79, 77, 57, 88, 5];
+    const END_GAME_THREAT_MINOR: [i32; PIECE_KIND_COUNT] = [0, 161, 56, 41, 119, 32];
+
+    if end_game {
+        END_GAME_THREAT_MINOR[kind as usize]
+    } else {
+        EARLY_GAME_THREAT_MINOR[kind as usize]
+    }
+}
+
+#[inline]
+const fn rook_threat(kind: PieceKind, end_game: bool) -> i32 {
+    const EARLY_GAME_THREAT_MINOR: [i32; PIECE_KIND_COUNT] = [0, 58, 42, 37, 0, 3];
+    const END_GAME_THREAT_MINOR: [i32; PIECE_KIND_COUNT] = [0, 79, 77, 57, 88, 5];
+
+    if end_game {
+        END_GAME_THREAT_MINOR[kind as usize]
+    } else {
+        EARLY_GAME_THREAT_MINOR[kind as usize]
     }
 }
 
