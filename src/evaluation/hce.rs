@@ -4,10 +4,11 @@
 
 #![cfg_attr(feature = "nnue", allow(dead_code))]
 
-use crate::bitboards::Bitboard;
+#[allow(clippy::wildcard_imports)]
+use crate::bitboards::{constants::*, Bitboard};
 use crate::board::{Direction, Square, BOARD_FILES, BOARD_RANKS};
 use crate::movegen;
-use crate::piece::{Piece, PieceKind, Side, PIECE_KIND_COUNT};
+use crate::piece::{Piece, PieceKind, Side, PIECE_KIND_COUNT, SIDE_COUNT};
 use crate::position::{Position, PositionBitboards};
 
 const EARLY_GAME_VALUES: [i32; PIECE_KIND_COUNT] = [i32::MAX, 2538, 825, 781, 1276, 124];
@@ -139,6 +140,52 @@ const END_GAME_PAWN_PSQT: [[i32; BOARD_FILES]; BOARD_RANKS] = [
     [0, 0, 0, 0, 0, 0, 0, 0],
 ];
 
+const EARLY_GAME_MOBILITY: [&[i32]; PIECE_KIND_COUNT - 2] = [
+    &[
+        -30, -12, -8, -9, 20, 23, 23, 35, 38, 53, 64, 65, 65, 66, 67, 67, 72, 72, 77, 79, 93, 108,
+        108, 108, 110, 114, 114, 116,
+    ],
+    &[-48, -20, 16, 26, 38, 51, 55, 63, 63, 68, 81, 81, 91, 98],
+    &[-62, -53, -12, -4, 3, 13, 22, 28, 33],
+    &[-60, -20, 2, 3, 3, 11, 22, 31, 40, 40, 41, 48, 57, 57, 62],
+];
+const END_GAME_MOBILITY: [&[i32]; PIECE_KIND_COUNT - 2] = [
+    &[
+        -30, -12, -8, -9, 20, 23, 23, 35, 38, 53, 64, 65, 65, 66, 67, 67, 72, 72, 77, 79, 93, 108,
+        108, 108, 110, 114, 114, 116,
+    ],
+    &[-48, -20, 16, 26, 38, 51, 55, 63, 63, 68, 81, 81, 91, 98],
+    &[-62, -53, -12, -4, 3, 13, 22, 28, 33],
+    &[-60, -20, 2, 3, 3, 11, 22, 31, 40, 40, 41, 48, 57, 57, 62],
+];
+
+const KING_ATTACKERS_WEIGHT: [i32; PIECE_KIND_COUNT] = [0, 10, 52, 81, 44, 0];
+const KING_SAFE_CHECK: [[i32; 2]; PIECE_KIND_COUNT] = [
+    [0, 0],
+    [730, 1128],
+    [650, 984],
+    [805, 1292],
+    [1071, 1886],
+    [0, 0],
+];
+
+const KING_FLANK: [u64; BOARD_FILES] = [
+    BITBOARD_QUEENSIDE.0 & !BITBOARD_FILE_D.0,
+    BITBOARD_QUEENSIDE.0,
+    BITBOARD_QUEENSIDE.0,
+    BITBOARD_CENTER_FILES.0,
+    BITBOARD_CENTER_FILES.0,
+    BITBOARD_KINGSIDE.0,
+    BITBOARD_KINGSIDE.0,
+    BITBOARD_KINGSIDE.0 & !BITBOARD_FILE_E.0,
+];
+const SIDE_CAMPS: [u64; SIDE_COUNT] = [
+    BITBOARD_RANK_6.0 | BITBOARD_RANK_7.0 | BITBOARD_RANK_8.0,
+    BITBOARD_RANK_1.0 | BITBOARD_RANK_2.0 | BITBOARD_RANK_3.0,
+];
+
+const TEMPO: f64 = 28.0;
+
 const WHITE: usize = Side::White as usize;
 const BLACK: usize = Side::Black as usize;
 
@@ -147,17 +194,17 @@ const ROOK: usize = PieceKind::Rook as usize;
 const KNIGHT: usize = PieceKind::Knight as usize;
 const BISHOP: usize = PieceKind::Bishop as usize;
 const QUEEN: usize = PieceKind::Queen as usize;
+const KING: usize = PieceKind::King as usize;
 
 #[allow(clippy::cast_lossless, clippy::cast_possible_truncation)]
 pub(super) fn hce_evaluation(position: &Position, bb: &PositionBitboards) -> i32 {
     let early_game = game_evaluation(position, bb, false);
     let mut end_game = game_evaluation(position, bb, true) as f64;
     let phase = phase(bb);
-    let rule50 = rule50(position);
     end_game = end_game * scale_factor(position, bb, end_game) / 64.0;
     let mut score = (early_game as f64 * phase + (end_game * (128.0 - phase))) / 128.0;
-    score += tempo();
-    score = score * (100.0 - rule50) / 100.0;
+    score += TEMPO;
+    score = score * (50.0 - position.halftime as f64) / 50.0;
     score as i32
 }
 
@@ -167,6 +214,9 @@ fn game_evaluation(position: &Position, bb: &PositionBitboards, end_game: bool) 
     let mut score = 0;
     score += total_material(bb, side, end_game) - total_material(bb, !side, end_game);
     score += total_psqt(position, side, end_game) - total_psqt(position, !side, end_game);
+    score += total_mobility(position, bb, side, end_game)
+        - total_mobility(position, bb, !side, end_game);
+    score += king(position, bb, side, end_game) - king(position, bb, !side, end_game);
     score
 }
 
@@ -180,12 +230,6 @@ fn phase(bb: &PositionBitboards) -> f64 {
     npm = END_GAME_LIMIT.max(EARLY_GAME_LIMIT.min(npm));
 
     ((npm - END_GAME_LIMIT) * 128.0) / (EARLY_GAME_LIMIT - END_GAME_LIMIT)
-}
-
-#[inline]
-#[allow(clippy::cast_lossless)]
-fn rule50(position: &Position) -> f64 {
-    position.halftime as f64 * 2.0
 }
 
 fn scale_factor(position: &Position, bb: &PositionBitboards, end_game: f64) -> f64 {
@@ -227,7 +271,7 @@ fn scale_factor_for_side(side: Side, position: &Position, bb: &PositionBitboards
             14.0
         }
     } else {
-        let are_opposite_bishops = opposite_bishops(position, bb);
+        let are_opposite_bishops = opposite_bishops(bb);
 
         if are_opposite_bishops
             && f_npm == EARLY_GAME_BISHOP_VALUE
@@ -294,11 +338,6 @@ fn scale_factor_for_side(side: Side, position: &Position, bb: &PositionBitboards
 }
 
 #[inline]
-const fn tempo() -> f64 {
-    28.0
-}
-
-#[inline]
 #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 const fn total_material(bb: &PositionBitboards, side: Side, end_game: bool) -> i32 {
     let friendly = side as usize;
@@ -340,6 +379,231 @@ fn total_psqt(position: &Position, side: Side, end_game: bool) -> i32 {
         .fold(0, |acc, (square, kind)| {
             acc + psqt(kind, side, square, end_game)
         })
+}
+
+fn total_mobility(position: &Position, bb: &PositionBitboards, side: Side, end_game: bool) -> i32 {
+    position
+        .squares
+        .iter()
+        .enumerate()
+        .filter_map(|(square, content)| {
+            if let Some(piece) = content {
+                if piece.side == side {
+                    Some((Square::try_from(square).ok()?, piece.kind))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+        .map(|(square, kind)| mobility_bonus(bb, kind, side, square, end_game))
+        .sum()
+}
+
+fn king(position: &Position, bb: &PositionBitboards, side: Side, end_game: bool) -> i32 {
+    if end_game {
+        king_end_game(position, bb, side)
+    } else {
+        king_early_game(position, bb, side)
+    }
+}
+
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+fn king_early_game(position: &Position, bb: &PositionBitboards, side: Side) -> i32 {
+    let friendly = side as usize;
+    let hostile = !side as usize;
+
+    let king_square = bb.pieces[friendly][KING]
+        .lsb_square()
+        .expect("King on board");
+    let (_, king_file) = king_square.to_rank_file();
+
+    let king_flank_once_attacked =
+        bb.attacked[hostile] & KING_FLANK[king_file] & SIDE_CAMPS[friendly];
+    let king_flank_twice_attacked = king_flank_once_attacked & bb.attacked_by_2[hostile];
+    let king_flank_attack =
+        king_flank_once_attacked.pop_count() + king_flank_twice_attacked.pop_count();
+
+    let mut score = 0;
+
+    if !((bb.pieces[friendly][PAWN] | bb.pieces[hostile][PAWN]) & KING_FLANK[king_file]) != 0 {
+        score -= 17;
+    }
+
+    score -= king_flank_attack as i32 * 8;
+    score -= king_danger(position, bb, side).pow(2) / 4096;
+
+    score
+}
+
+fn king_end_game(position: &Position, bb: &PositionBitboards, side: Side) -> i32 {
+    let friendly = side as usize;
+    let hostile = !side as usize;
+
+    let king_square = bb.pieces[friendly][KING]
+        .lsb_square()
+        .expect("King on board");
+    let (_, king_file) = king_square.to_rank_file();
+
+    let mut score = 0;
+
+    if !((bb.pieces[friendly][PAWN] | bb.pieces[hostile][PAWN]) & KING_FLANK[king_file]) != 0 {
+        score -= 95;
+    }
+
+    score -= king_danger(position, bb, side) / 16;
+    score -= 16 * king_pawn_distance(bb, side);
+
+    score
+}
+
+#[allow(
+    clippy::too_many_lines,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
+fn king_danger(position: &Position, bb: &PositionBitboards, side: Side) -> i32 {
+    let friendly = side as usize;
+    let hostile = !side as usize;
+
+    let mut king_danger = 0;
+
+    let king_square = bb.pieces[friendly][KING]
+        .lsb_square()
+        .expect("King on board");
+    let (_, king_file) = king_square.to_rank_file();
+
+    let weak_squares = bb.attacked[hostile]
+        & !bb.attacked_by_2[friendly]
+        & (!bb.attacked[friendly]
+            | bb.attacked_by[friendly][KING]
+            | bb.attacked_by[friendly][QUEEN]);
+
+    let safe_squares =
+        !bb.sides[hostile] & (!bb.attacked[friendly] | (weak_squares & bb.attacked_by_2[hostile]));
+
+    let mut unsafe_checks = Bitboard(0);
+
+    let king_rook_attacks = movegen::get_attacks_bitboard(
+        PieceKind::Rook,
+        side,
+        king_square,
+        bb.occupied & !bb.pieces[friendly][QUEEN],
+    );
+    let king_bishop_attacks = movegen::get_attacks_bitboard(
+        PieceKind::Bishop,
+        side,
+        king_square,
+        bb.occupied & !bb.pieces[friendly][QUEEN],
+    );
+
+    let rook_checks = king_rook_attacks & bb.attacked_by[hostile][ROOK] & safe_squares;
+    if rook_checks == 0 {
+        unsafe_checks |= king_rook_attacks & bb.attacked_by[hostile][ROOK];
+    } else {
+        king_danger += KING_SAFE_CHECK[ROOK][usize::from(rook_checks.more_than_one())];
+    }
+
+    let queen_checks = (king_rook_attacks | king_bishop_attacks)
+        & bb.attacked_by[hostile][QUEEN]
+        & safe_squares
+        & !(bb.attacked_by[friendly][QUEEN] | rook_checks);
+
+    if queen_checks != 0 {
+        king_danger += KING_SAFE_CHECK[QUEEN][usize::from(queen_checks.more_than_one())];
+    }
+
+    let bishop_checks =
+        king_bishop_attacks & bb.attacked_by[hostile][BISHOP] & safe_squares & !queen_checks;
+    if bishop_checks == 0 {
+        unsafe_checks |= king_bishop_attacks & bb.attacked_by[hostile][BISHOP];
+    } else {
+        king_danger += KING_SAFE_CHECK[BISHOP][usize::from(bishop_checks.more_than_one())];
+    }
+
+    let knight_attacks =
+        movegen::get_attacks_bitboard(PieceKind::Knight, side, king_square, bb.occupied);
+    let knight_checks = knight_attacks & bb.attacked_by[hostile][KNIGHT] & safe_squares;
+    if knight_attacks & safe_squares == 0 {
+        unsafe_checks |= knight_attacks & bb.attacked_by[hostile][KNIGHT];
+    } else {
+        king_danger += KING_SAFE_CHECK[KNIGHT][usize::from(knight_checks.more_than_one())];
+    }
+
+    let king_ring = bb.pieces[friendly][KING] | bb.attacked_by[friendly][KING];
+    let pinned_pieces = (bb.pinmask_hv[friendly] | bb.pinmask_d12[friendly]) & bb.occupied;
+    let no_queen = bb.pieces[hostile][QUEEN] == 0;
+    let knight_defender = bb.attacked_by[friendly][KNIGHT] & bb.attacked_by[friendly][KING] != 0;
+
+    let king_flank_once_attacked =
+        bb.attacked[hostile] & KING_FLANK[king_file] & SIDE_CAMPS[friendly];
+    let king_flank_twice_attacked = king_flank_once_attacked & bb.attacked_by_2[hostile];
+    let king_flank_attack =
+        king_flank_once_attacked.pop_count() + king_flank_twice_attacked.pop_count();
+    let king_flank_defence = bb.attacked[friendly] & KING_FLANK[king_file] & SIDE_CAMPS[friendly];
+
+    let mut king_attackers_count = (king_ring & bb.attacked_by[hostile][PAWN]).pop_count() as i32;
+    let mut king_attackers_weight = 0;
+    let mut king_attacks_count = 0;
+    for (i, mut pieces) in bb.pieces[hostile].into_iter().enumerate() {
+        let kind = PieceKind::try_from(i).unwrap();
+        let occupied = match kind {
+            PieceKind::Rook => bb.occupied & !bb.pieces[friendly][QUEEN],
+            PieceKind::Bishop => {
+                bb.occupied & !bb.pieces[friendly][QUEEN] & !bb.pieces[friendly][ROOK]
+            }
+            _ => bb.occupied,
+        };
+
+        while let Some(square) = pieces.pop_lsb_square() {
+            let attacks = movegen::get_attacks_bitboard(kind, !side, square, occupied);
+
+            if attacks & king_ring != 0 {
+                king_attackers_count += 1;
+                king_attackers_weight += KING_ATTACKERS_WEIGHT[i];
+                king_attacks_count += (attacks & bb.attacked_by[friendly][KING]).pop_count() as i32;
+            }
+        }
+    }
+
+    king_danger += king_attackers_count * king_attackers_weight;
+    king_danger += 183 * (king_ring & weak_squares).pop_count() as i32;
+    king_danger += 148 * unsafe_checks.pop_count() as i32;
+    king_danger += 98 * pinned_pieces.pop_count() as i32;
+    king_danger += 69 * king_attacks_count;
+    king_danger += 3 * king_flank_attack.pow(2) as i32 / 8;
+    king_danger += total_mobility(position, bb, !side, false);
+    king_danger -= total_mobility(position, bb, side, false);
+    king_danger -= 873 * i32::from(no_queen);
+    king_danger -= 100 * i32::from(knight_defender);
+    king_danger -= 4 * king_flank_defence.pop_count() as i32;
+    king_danger += 37;
+
+    if king_danger > 100 {
+        king_danger
+    } else {
+        0
+    }
+}
+
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+fn king_pawn_distance(bb: &PositionBitboards, side: Side) -> i32 {
+    let friendly = side as usize;
+    let king_square = bb.pieces[friendly][KING]
+        .lsb_square()
+        .expect("King on board");
+    let (king_rank, king_file) = king_square.to_rank_file();
+
+    let mut closest = i32::MAX;
+    let mut pawns = bb.pieces[friendly][PAWN];
+    while let Some(square) = pawns.pop_lsb_square() {
+        let (rank, file) = square.to_rank_file();
+        let distance = rank.abs_diff(king_rank) + file.abs_diff(king_file);
+        closest = closest.min(distance as i32);
+    }
+
+    closest.min(6)
 }
 
 #[allow(clippy::cast_precision_loss)]
@@ -408,22 +672,22 @@ fn passed_defence(side: Side, mut square: Square, bb: &PositionBitboards) -> boo
     distance < 4
 }
 
-fn opposite_bishops(position: &Position, bb: &PositionBitboards) -> bool {
+const fn opposite_bishops(bb: &PositionBitboards) -> bool {
     if bb.pieces[WHITE][BISHOP].pop_count() != 1 || bb.pieces[BLACK][BISHOP].pop_count() != 1 {
         false
     } else {
         let mut bishops = [0, 0];
-        for rank in 0..BOARD_RANKS {
-            for file in 0..BOARD_FILES {
-                let square = Square::from_rank_file(rank, file).expect("Is in bounds");
-                if let Some(Piece {
-                    kind: PieceKind::Bishop,
-                    side,
-                }) = position[square]
-                {
-                    bishops[side as usize] = (rank + file) % 2;
-                }
-            }
+
+        if let Some(square) = bb.pieces[WHITE][BISHOP].lsb() {
+            let rank = square / 8;
+            let file = square % 8;
+            bishops[WHITE] = rank + file;
+        }
+
+        if let Some(square) = bb.pieces[BLACK][BISHOP].lsb() {
+            let rank = square / 8;
+            let file = square % 8;
+            bishops[BLACK] = rank + file;
         }
 
         bishops[0] != bishops[1]
@@ -461,6 +725,53 @@ const fn psqt(kind: PieceKind, side: Side, square: Square, end_game: bool) -> i3
     } else {
         EARLY_GAME_PSQT[kind as usize][rank][file]
     }
+}
+
+#[inline]
+fn mobility_bonus(
+    bb: &PositionBitboards,
+    kind: PieceKind,
+    side: Side,
+    square: Square,
+    end_game: bool,
+) -> i32 {
+    if kind == PieceKind::King || kind == PieceKind::Pawn {
+        0
+    } else if end_game {
+        END_GAME_MOBILITY[kind as usize - 1][mobility(bb, kind, side, square) as usize]
+    } else {
+        EARLY_GAME_MOBILITY[kind as usize - 1][mobility(bb, kind, side, square) as usize]
+    }
+}
+
+#[inline]
+fn mobility(bb: &PositionBitboards, kind: PieceKind, side: Side, square: Square) -> i32 {
+    (movegen::get_attacks_bitboard(kind, side, square, bb.occupied).0 & mobility_area(bb, side).0)
+        .count_ones() as i32
+}
+
+const fn mobility_area(bb: &PositionBitboards, side: Side) -> Bitboard {
+    const LOW_RANKS: [u64; SIDE_COUNT] = [
+        BITBOARD_RANK_2.0 | BITBOARD_RANK_3.0,
+        BITBOARD_RANK_7.0 | BITBOARD_RANK_6.0,
+    ];
+
+    let friendly = side as usize;
+    let hostile = 1 ^ friendly;
+
+    let shifted = if friendly == WHITE {
+        bb.sides[friendly].0 >> BOARD_FILES
+    } else {
+        bb.sides[friendly].0 << BOARD_FILES
+    };
+
+    let b = bb.pieces[friendly][PAWN].0 & (shifted | LOW_RANKS[friendly]);
+
+    Bitboard(
+        !(b | bb.pieces[friendly][KING].0
+            | bb.pieces[friendly][QUEEN].0
+            | bb.attacked_by[hostile][PAWN].0),
+    )
 }
 
 #[cfg(test)]
@@ -519,7 +830,7 @@ mod tests {
 
     #[test]
     fn test_candidate_passed() {
-        let board = Chessboard::from_fen("2b1k3/1Pp1Pp2/3Pp3/3p4/8/8/PPP3PP/2B1K3 b KQkq - 0 1")
+        let board = Chessboard::from_fen("2b1k3/1Pp1Pp2/3Pp3/3p4/8/8/PPP3PP/2B1K3 b - - 0 1")
             .expect("Valid fen");
         assert_eq!(
             candidate_passed(Side::White, &board.position, &board.bitboards),

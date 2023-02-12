@@ -104,6 +104,10 @@ impl MoveSearcher {
         let moves = self.board.moves().clone();
         let mut scores = vec![0; moves.len()];
 
+        if moves.is_empty() {
+            return result;
+        }
+
         'search: for depth in 0..max_depth {
             let (mut best_iteration_move, mut best_iteration_score) = (None, -i32::MAX);
             self.transposition.clear();
@@ -133,8 +137,15 @@ impl MoveSearcher {
                 );
             }
 
-            result.best_move = best_iteration_move;
-            result.score = best_iteration_score;
+            if best_iteration_move.is_some() {
+                result.best_move = best_iteration_move;
+                result.score = best_iteration_score;
+
+                // If checkmate is found
+                if best_iteration_score >= 10_000_000 {
+                    break 'search;
+                }
+            }
             result.depth = depth;
         }
 

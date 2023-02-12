@@ -173,14 +173,14 @@ impl fmt::Display for Piece {
 }
 
 impl Side {
-    pub(crate) fn forward(self) -> Direction {
+    pub(crate) const fn forward(self) -> Direction {
         match self {
             Self::White => Direction::North,
             Self::Black => Direction::South,
         }
     }
 
-    pub(crate) fn backward(self) -> Direction {
+    pub(crate) const fn backward(self) -> Direction {
         match self {
             Self::White => Direction::South,
             Self::Black => Direction::North,

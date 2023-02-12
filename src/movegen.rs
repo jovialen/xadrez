@@ -279,18 +279,18 @@ fn generate_moves(
 
     let mut pieces = bitboards.pieces[friendly][kind_index];
     while let Some(from) = pieces.pop_lsb_square() {
-        let is_pinned_hv = bitboards.pinmask_hv.get(from);
-        let is_pinned_d12 = bitboards.pinmask_d12.get(from);
+        let is_pinned_hv = bitboards.pinmask_hv[friendly].get(from);
+        let is_pinned_d12 = bitboards.pinmask_d12[friendly].get(from);
 
         let pseudo_moves = get_attacks_bitboard(kind, side, from, bitboards.occupied);
         let mut legal_moves = pseudo_moves & bitboards.checkmask;
 
         if is_pinned_hv {
             legal_moves &= ROOK_MOVES.get(from, bitboards.occupied);
-            legal_moves &= bitboards.pinmask_hv;
+            legal_moves &= bitboards.pinmask_hv[friendly];
         } else if is_pinned_d12 {
             legal_moves &= BISHOP_MOVES.get(from, bitboards.occupied);
-            legal_moves &= bitboards.pinmask_d12;
+            legal_moves &= bitboards.pinmask_d12[friendly];
         }
 
         let quiets = legal_moves & !bitboards.occupied;
@@ -322,8 +322,8 @@ fn generate_pawn_moves(
     let mut pawns = bitboards.pieces[friendly][PAWN];
     while let Some(from) = pawns.pop_lsb_square() {
         let promoting = PROMOTION_RANK[friendly].get(from);
-        let is_pinned_hv = bitboards.pinmask_hv.get(from);
-        let is_pinned_d12 = bitboards.pinmask_d12.get(from);
+        let is_pinned_hv = bitboards.pinmask_hv[friendly].get(from);
+        let is_pinned_d12 = bitboards.pinmask_d12[friendly].get(from);
 
         let (mut moves, attacks) = PAWN_MOVES[friendly][from as usize];
         moves &= ROOK_MOVES.get(from, bitboards.occupied);
@@ -333,13 +333,13 @@ fn generate_pawn_moves(
         let mut ep_capture = attacks & ep_square;
 
         if is_pinned_hv {
-            quiets &= bitboards.pinmask_hv;
-            captures &= bitboards.pinmask_hv;
-            ep_capture &= bitboards.pinmask_hv;
+            quiets &= bitboards.pinmask_hv[friendly];
+            captures &= bitboards.pinmask_hv[friendly];
+            ep_capture &= bitboards.pinmask_hv[friendly];
         } else if is_pinned_d12 {
-            quiets &= bitboards.pinmask_d12;
-            captures &= bitboards.pinmask_d12;
-            ep_capture &= bitboards.pinmask_d12;
+            quiets &= bitboards.pinmask_d12[friendly];
+            captures &= bitboards.pinmask_d12[friendly];
+            ep_capture &= bitboards.pinmask_d12[friendly];
         }
 
         #[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
@@ -393,7 +393,7 @@ fn generate_king_moves(
     let mut kings = bitboards.pieces[friendly][PieceKind::King as usize];
     while let Some(from) = kings.pop_lsb_square() {
         let moves = get_attacks_bitboard(PieceKind::King, side, from, bitboards.occupied)
-            & !bitboards.king_danger_squares;
+            & !bitboards.king_danger_squares[friendly];
 
         let quiets = moves & !bitboards.occupied;
         let captures = moves & bitboards.sides[hostile];
@@ -406,7 +406,7 @@ fn generate_king_moves(
                 [[Square::G1, Square::C1], [Square::G8, Square::C8]];
 
             for i in 0..2 {
-                if can_castle(friendly, i, castling, bitboards) {
+                if can_castle(side, i, castling, bitboards) {
                     dest.push(Move {
                         from,
                         to: CASTLING_DESTS[friendly][i],
@@ -419,7 +419,7 @@ fn generate_king_moves(
 }
 
 fn can_castle(
-    friendly: usize,
+    side: Side,
     board_side: usize,
     permisions: [[bool; 2]; SIDE_COUNT],
     bitboards: &PositionBitboards,
@@ -434,9 +434,12 @@ fn can_castle(
         [0b0110_0000 << BLACK_OFFSET, 0b0000_1100 << BLACK_OFFSET],
     ];
 
+    let friendly = side as usize;
+    let hostile = !side as usize;
+
     permisions[friendly][board_side]
         && bitboards.occupied & REQUIRED_CLEARING[friendly][board_side] == 0
-        && (bitboards.attacks | bitboards.king_danger_squares)
+        && (bitboards.attacked[hostile] | bitboards.king_danger_squares[friendly])
             & REQUIRED_CONTROL[friendly][board_side]
             == 0
 }

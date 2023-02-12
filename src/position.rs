@@ -46,10 +46,12 @@ pub(crate) struct PositionBitboards {
 
     pub checkmask: Bitboard,
     pub checkers: Bitboard,
-    pub pinmask_hv: Bitboard,
-    pub pinmask_d12: Bitboard,
-    pub attacks: Bitboard,
-    pub king_danger_squares: Bitboard,
+    pub pinmask_hv: [Bitboard; SIDE_COUNT],
+    pub pinmask_d12: [Bitboard; SIDE_COUNT],
+    pub attacked: [Bitboard; SIDE_COUNT],
+    pub attacked_by: [[Bitboard; PIECE_KIND_COUNT]; SIDE_COUNT],
+    pub attacked_by_2: [Bitboard; SIDE_COUNT],
+    pub king_danger_squares: [Bitboard; SIDE_COUNT],
 }
 
 fn init_rand_nums<T, const SIZE: usize>() -> [T; SIZE]
@@ -312,24 +314,32 @@ impl PositionBitboards {
             .expect("Cannot generate moves without a king on the board.");
 
         // Find attacked squares
-        for (i, mut pieces) in pb.pieces[hostile].into_iter().enumerate() {
-            let kind = PieceKind::try_from(i).unwrap();
+        for side in [Side::White, Side::Black] {
+            let friendly = side as usize;
+            let hostile = !side as usize;
 
-            while let Some(from) = pieces.pop_lsb_square() {
-                pb.attacks |= movegen::get_attacks_bitboard(kind, !side, from, pb.occupied)
-                    & !pb.sides[hostile];
+            for (i, mut pieces) in pb.pieces[hostile].into_iter().enumerate() {
+                let kind = PieceKind::try_from(i).unwrap();
 
-                pb.king_danger_squares |= movegen::get_attacks_bitboard(
-                    kind,
-                    !side,
-                    from,
-                    pb.occupied & !pb.pieces[friendly][King as usize],
-                );
+                while let Some(from) = pieces.pop_lsb_square() {
+                    let attack = movegen::get_attacks_bitboard(kind, !side, from, pb.occupied);
+
+                    pb.attacked_by_2[hostile] |= pb.attacked[hostile] & attack;
+                    pb.attacked_by[hostile][i] |= attack;
+                    pb.attacked[hostile] |= attack;
+
+                    pb.king_danger_squares[friendly] |= movegen::get_attacks_bitboard(
+                        kind,
+                        !side,
+                        from,
+                        pb.occupied & !pb.pieces[friendly][King as usize],
+                    );
+                }
             }
         }
 
         // Find checkers and generate checkmask
-        let in_check = pb.attacks.get(king_square);
+        let in_check = pb.attacked[hostile].get(king_square);
         if in_check {
             pb.checkmask =
                 Self::generate_checkmask(king_square, side, pb.pieces[hostile], pb.occupied);
@@ -337,27 +347,34 @@ impl PositionBitboards {
         }
 
         // Find pins and generate pinmask
-        let hv_pieces =
-            (pb.pieces[hostile][Rook as usize] | pb.pieces[hostile][Queen as usize]) & !pb.checkers;
-        pb.pinmask_hv = Self::find_pins(
-            Rook,
-            side,
-            king_square,
-            hv_pieces,
-            pb.sides[friendly],
-            pb.occupied,
-        );
+        for side in [Side::White, Side::Black] {
+            let friendly = side as usize;
+            let hostile = !side as usize;
 
-        let d12_pieces = (pb.pieces[hostile][Bishop as usize] | pb.pieces[hostile][Queen as usize])
-            & !pb.checkers;
-        pb.pinmask_d12 = Self::find_pins(
-            Bishop,
-            side,
-            king_square,
-            d12_pieces,
-            pb.sides[friendly],
-            pb.occupied,
-        );
+            let hv_pieces = (pb.pieces[hostile][Rook as usize]
+                | pb.pieces[hostile][Queen as usize])
+                & !pb.checkers;
+            pb.pinmask_hv[friendly] = Self::find_pins(
+                Rook,
+                side,
+                king_square,
+                hv_pieces,
+                pb.sides[friendly],
+                pb.occupied,
+            );
+
+            let d12_pieces = (pb.pieces[hostile][Bishop as usize]
+                | pb.pieces[hostile][Queen as usize])
+                & !pb.checkers;
+            pb.pinmask_d12[friendly] = Self::find_pins(
+                Bishop,
+                side,
+                king_square,
+                d12_pieces,
+                pb.sides[friendly],
+                pb.occupied,
+            );
+        }
 
         pb
     }
@@ -414,10 +431,12 @@ impl Default for PositionBitboards {
 
             checkmask: BITBOARD_ALL,
             checkers: Bitboard(0),
-            pinmask_hv: Bitboard(0),
-            pinmask_d12: Bitboard(0),
-            attacks: Bitboard(0),
-            king_danger_squares: Bitboard(0),
+            pinmask_hv: [Bitboard(0); SIDE_COUNT],
+            pinmask_d12: [Bitboard(0); SIDE_COUNT],
+            attacked: [Bitboard(0); SIDE_COUNT],
+            attacked_by: [[Bitboard(0); PIECE_KIND_COUNT]; SIDE_COUNT],
+            attacked_by_2: [Bitboard(0); SIDE_COUNT],
+            king_danger_squares: [Bitboard(0); SIDE_COUNT],
         }
     }
 }

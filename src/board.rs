@@ -287,6 +287,7 @@ impl Chessboard {
     pub fn undo(&mut self) {
         if let Some((last_pos, last_moves)) = self.history.pop() {
             self.position = last_pos;
+            self.bitboards = self.position.bitboards();
             self.legal_moves = last_moves;
         }
     }
@@ -734,7 +735,7 @@ impl fmt::Display for DrawReason {
 
 impl Direction {
     #[allow(clippy::cast_possible_wrap)]
-    pub(crate) fn offset(self) -> isize {
+    pub(crate) const fn offset(self) -> isize {
         match self {
             Self::North => BOARD_FILES as isize,
             Self::East => 1,

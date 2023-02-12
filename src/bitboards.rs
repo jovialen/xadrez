@@ -29,6 +29,13 @@ pub(crate) mod constants {
 
     pub(crate) const BITBOARD_EDGES: Bitboard = Bitboard(0xFF81_8181_8181_81FF);
     pub(crate) const BITBOARD_INNER: Bitboard = Bitboard(!0xFF81_8181_8181_81FF);
+
+    pub(crate) const BITBOARD_QUEENSIDE: Bitboard =
+        Bitboard(BITBOARD_FILE_A.0 | BITBOARD_FILE_B.0 | BITBOARD_FILE_C.0 | BITBOARD_FILE_D.0);
+    pub(crate) const BITBOARD_KINGSIDE: Bitboard =
+        Bitboard(BITBOARD_FILE_E.0 | BITBOARD_FILE_F.0 | BITBOARD_FILE_G.0 | BITBOARD_FILE_H.0);
+    pub(crate) const BITBOARD_CENTER_FILES: Bitboard =
+        Bitboard(BITBOARD_FILE_C.0 | BITBOARD_FILE_D.0 | BITBOARD_FILE_E.0 | BITBOARD_FILE_F.0);
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
@@ -60,7 +67,7 @@ impl Bitboard {
     }
 
     #[allow(clippy::if_not_else)]
-    pub fn lsb(self) -> Option<usize> {
+    pub const fn lsb(self) -> Option<usize> {
         // Using this method of finding the least signifigant bit:
         // https://www.chessprogramming.org/BitScan#With_separated_LS1B
 
@@ -73,7 +80,7 @@ impl Bitboard {
 
         if self.0 != 0 {
             let i = (((self.0 ^ (self.0 - 1)).wrapping_mul(DEBRUIJN)) >> 58) as usize;
-            let bit_position = *DEBRUIJN_BITSCAN_TABLE.get(i)?;
+            let bit_position = DEBRUIJN_BITSCAN_TABLE[i];
 
             Some(bit_position)
         } else {
@@ -81,22 +88,31 @@ impl Bitboard {
         }
     }
 
+    #[inline]
     pub fn lsb_square(self) -> Option<Square> {
         self.lsb().and_then(|i| Square::try_from(i).ok())
     }
 
+    #[inline]
     pub fn pop_lsb(&mut self) -> Option<usize> {
         let lsb = self.lsb()?;
         self.off(lsb);
         Some(lsb)
     }
 
+    #[inline]
     pub fn pop_lsb_square(&mut self) -> Option<Square> {
         self.pop_lsb().and_then(|i| Square::try_from(i).ok())
     }
 
+    #[inline]
     pub const fn pop_count(self) -> usize {
         self.0.count_ones() as usize
+    }
+
+    #[inline]
+    pub const fn more_than_one(self) -> bool {
+        self.0 & (self.0 - 1) != 0
     }
 }
 
