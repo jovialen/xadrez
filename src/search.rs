@@ -212,11 +212,12 @@ impl MoveSearcher {
             return *value;
         }
 
-        if depth == 0 {
+        let mut moves = self.board.moves().clone();
+
+        if depth == 0 || moves.is_empty() {
             return self.quiesce(alpha, beta);
         }
 
-        let mut moves = self.board.moves().clone();
         moves.sort_by_key(|m| self.score_move(*m));
 
         for m in moves {
