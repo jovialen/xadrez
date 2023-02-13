@@ -19,6 +19,7 @@ pub struct MoveSearcher {
     time: Option<Duration>,
     debug: bool,
 
+    data: SearchData,
     transposition: HashMap<Position, i32>,
 }
 
@@ -41,6 +42,11 @@ pub struct SearchData {
     pub start_time: Instant,
     /// How long the search lasted.
     pub duration: Duration,
+
+    /// How many times the transposition table was used instead of evaluating the branch.
+    pub transposition_hits: usize,
+    /// How many branches where pruned from the search.
+    pub prunes: usize,
 }
 
 impl MoveSearcher {
@@ -52,6 +58,7 @@ impl MoveSearcher {
             depth: None,
             time: None,
             debug: false,
+            data: SearchData::new(),
             transposition: HashMap::new(),
         }
     }
@@ -100,13 +107,11 @@ impl MoveSearcher {
     pub fn search(mut self) -> SearchData {
         let max_depth = self.depth.unwrap_or(usize::MAX).max(1);
 
-        let mut result = SearchData::new();
-
         let moves = self.board.moves().clone();
         let mut scores = vec![0; moves.len()];
 
         if moves.is_empty() {
-            return result;
+            return self.data;
         }
 
         'search: for depth in 0..max_depth {
@@ -124,7 +129,7 @@ impl MoveSearcher {
                 }
 
                 if let Some(max_time) = self.time {
-                    if result.start_time.elapsed() > max_time {
+                    if self.data.start_time.elapsed() > max_time {
                         break 'search;
                     }
                 }
@@ -139,20 +144,20 @@ impl MoveSearcher {
             }
 
             if best_iteration_move.is_some() {
-                result.best_move = best_iteration_move;
-                result.score = best_iteration_score;
+                self.data.best_move = best_iteration_move;
+                self.data.score = best_iteration_score;
 
                 // If checkmate is found
                 if best_iteration_score >= 10_000_000 {
                     break 'search;
                 }
             }
-            result.depth = depth;
+            self.data.depth = depth;
         }
 
-        result.duration = result.start_time.elapsed();
+        self.data.duration = self.data.start_time.elapsed();
 
-        result
+        self.data
     }
 
     fn score_move(&self, m: Move) -> i32 {
@@ -201,6 +206,7 @@ impl MoveSearcher {
 
     fn alpha_beta(&mut self, depth: usize, mut alpha: i32, beta: i32) -> i32 {
         if let Some(value) = self.transposition.get(&self.board.position) {
+            self.data.transposition_hits += 1;
             return *value;
         }
 
@@ -218,6 +224,7 @@ impl MoveSearcher {
             self.board.undo();
 
             if score >= beta {
+                self.data.prunes += 1;
                 return beta;
             }
             alpha = alpha.max(score);
@@ -228,11 +235,13 @@ impl MoveSearcher {
 
     fn quiesce(&mut self, mut alpha: i32, beta: i32) -> i32 {
         if let Some(score) = self.transposition.get(&self.board.position) {
-            return *score;
+            self.data.transposition_hits += 1;
+            return alpha.max(*score);
         }
 
         let evaluation = self.board.evaluate_relative();
         if evaluation >= beta {
+            self.data.prunes += 1;
             return beta;
         }
         alpha = alpha.max(evaluation);
@@ -258,6 +267,7 @@ impl MoveSearcher {
             self.board.undo();
 
             if score >= beta {
+                self.data.prunes += 1;
                 return beta;
             }
             alpha = alpha.max(score);
@@ -275,6 +285,8 @@ impl SearchData {
             depth: 0,
             start_time: Instant::now(),
             duration: Duration::default(),
+            transposition_hits: 0,
+            prunes: 0,
         }
     }
 }

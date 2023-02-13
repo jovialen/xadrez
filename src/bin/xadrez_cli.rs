@@ -85,14 +85,17 @@ fn search<'a, I: Iterator<Item = &'a str>>(board: &Chessboard, mut args: I) {
         .and_then(|x| x.parse().ok())
         .unwrap_or(usize::MAX);
 
-    if let Some(best) = MoveSearcher::new(board)
+    let search_data = MoveSearcher::new(board)
         .max_time(Duration::from_millis(time_ms))
         .max_depth(depth)
         .debug(true)
-        .search()
-        .best_move
-    {
-        println!("Best move: {best}");
+        .search();
+
+    if let Some(best) = search_data.best_move {
+        println!(
+            "Best move: {best} (Score: {}, Transposition Hits: {}, Prunes: {})",
+            search_data.score, search_data.transposition_hits, search_data.prunes
+        );
     } else {
         println!("Failed to find a move. Try giving more time to search.");
     }
