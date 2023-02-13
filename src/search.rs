@@ -224,16 +224,17 @@ impl MoveSearcher {
 
             self.board.make_move(m).expect("All moves should be legal");
             let score = -self.alpha_beta(depth - 1, -beta, -alpha);
-            self.transposition.insert(self.board.position, score);
             self.board.undo();
 
             if score >= beta {
                 self.data.prunes += 1;
+                self.transposition.insert(self.board.position, beta);
                 return beta;
             }
             alpha = alpha.max(score);
         }
 
+        self.transposition.insert(self.board.position, alpha);
         alpha
     }
 
@@ -269,16 +270,17 @@ impl MoveSearcher {
 
             self.board.make_move(m).expect("All moves should be legal");
             let score = -self.quiesce(-beta, -alpha);
-            self.transposition.insert(self.board.position, score);
             self.board.undo();
 
             if score >= beta {
                 self.data.prunes += 1;
+                self.transposition.insert(self.board.position, beta);
                 return beta;
             }
             alpha = alpha.max(score);
         }
 
+        self.transposition.insert(self.board.position, alpha);
         alpha
     }
 }
