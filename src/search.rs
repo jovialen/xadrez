@@ -43,6 +43,8 @@ pub struct SearchData {
     /// How long the search lasted.
     pub duration: Duration,
 
+    /// How many nodes where searched.
+    pub nodes: usize,
     /// How many times the transposition table was used instead of evaluating the branch.
     pub transposition_hits: usize,
     /// How many branches where pruned from the search.
@@ -218,6 +220,8 @@ impl MoveSearcher {
         moves.sort_by_key(|m| self.score_move(*m));
 
         for m in moves {
+            self.data.nodes += 1;
+
             self.board.make_move(m).expect("All moves should be legal");
             let score = -self.alpha_beta(depth - 1, -beta, -alpha);
             self.transposition.insert(self.board.position, score);
@@ -261,6 +265,8 @@ impl MoveSearcher {
         }
 
         for m in moves {
+            self.data.nodes += 1;
+
             self.board.make_move(m).expect("All moves should be legal");
             let score = -self.quiesce(-beta, -alpha);
             self.transposition.insert(self.board.position, score);
@@ -285,6 +291,7 @@ impl SearchData {
             depth: 0,
             start_time: Instant::now(),
             duration: Duration::default(),
+            nodes: 0,
             transposition_hits: 0,
             prunes: 0,
         }
