@@ -2,9 +2,9 @@
 //!
 //! Provides the structures relating to the changes on the chessboard.
 
-use crate::board::Square;
 use crate::error::ParseLANError;
 use crate::piece::PieceKind;
+use crate::square::Square;
 use std::fmt;
 use std::str::FromStr;
 
@@ -188,8 +188,8 @@ mod tests {
     mod eq {
         #[allow(clippy::enum_glob_use)]
         use super::{MoveKind::*, *};
-        use crate::board::Square::{A1, A2, A3, B1};
         use crate::piece::PieceKind::{Bishop, Knight, Queen, Rook};
+        use crate::square::Square::{A1, A2, A3, B1};
 
         #[test]
         fn any_is_all_except_promotion() {

@@ -45,7 +45,8 @@ pub struct SearchData {
 
     /// How many nodes where searched.
     pub nodes: usize,
-    /// How many times the transposition table was used instead of evaluating the branch.
+    /// How many times the transposition table was used instead of evaluating
+    /// the branch.
     pub transposition_hits: usize,
     /// How many branches where pruned from the search.
     pub prunes: usize,

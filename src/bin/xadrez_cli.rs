@@ -4,11 +4,12 @@ use itertools::Itertools;
 use std::io;
 use std::str::FromStr;
 use std::time::Duration;
-use xadrez::board::{Chessboard, GameState, Square};
+use xadrez::board::{Chessboard, GameState};
 use xadrez::error::ParseFenError;
 use xadrez::fen::FEN_STARTING_POSITION;
 use xadrez::r#move::Move;
 use xadrez::search::MoveSearcher;
+use xadrez::square::Square;
 
 fn position<'a, I: Iterator<Item = &'a str>>(
     board: &mut Chessboard,

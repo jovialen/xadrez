@@ -1,10 +1,10 @@
 use crate::bitboards::constants::BITBOARD_ALL;
 use crate::bitboards::Bitboard;
-use crate::board::{Square, BOARD_FILES, BOARD_SIZE};
 use crate::error::ParseFenError;
 use crate::fen::FenString;
 use crate::movegen;
 use crate::piece::{Piece, PieceKind, Side, PIECE_KIND_COUNT, SIDE_COUNT};
+use crate::square::{Square, BOARD_FILES, BOARD_SIZE};
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use std::hash::Hash;

@@ -1,4 +1,4 @@
-use crate::board::Square;
+use crate::square::Square;
 use std::{fmt, ops};
 
 pub(crate) mod constants {
@@ -304,7 +304,7 @@ impl fmt::Debug for Bitboard {
 mod tests {
     use super::constants::BITBOARD_ALL;
     use super::*;
-    use crate::board::Square;
+    use crate::square::Square;
 
     #[test]
     fn set_bits() {

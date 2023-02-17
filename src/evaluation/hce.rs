@@ -6,10 +6,10 @@
 
 #[allow(clippy::wildcard_imports)]
 use crate::bitboards::{constants::*, Bitboard};
-use crate::board::{Direction, Square, BOARD_FILES, BOARD_RANKS};
 use crate::movegen;
 use crate::piece::{Piece, PieceKind, Side, PIECE_KIND_COUNT, SIDE_COUNT};
 use crate::position::{Position, PositionBitboards};
+use crate::square::{Direction, Square, BOARD_FILES, BOARD_RANKS};
 
 const EARLY_GAME_VALUES: [i32; PIECE_KIND_COUNT] = [i32::MAX, 2538, 825, 781, 1276, 124];
 const END_GAME_VALUES: [i32; PIECE_KIND_COUNT] = [i32::MAX, 2682, 915, 854, 1380, 206];

@@ -6,6 +6,7 @@ description = "A chess engine written in Rust."
 repository = "https://github.com/jovialen/xadrez"
 license-file = "LICENSE"
 readme = "README.md"
+build = "src/build.rs"
 
 [profile.release]
 opt-level = 3
@@ -34,6 +35,11 @@ rand = "0.8.5"
 
 [dev-dependencies]
 criterion = "0.4.0"
+
+[build-dependencies]
+num = "0.4"
+num-derive = "0.3"
+num-traits = "0.2"
 
 [[bench]]
 name = "perft"

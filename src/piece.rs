@@ -2,10 +2,9 @@
 //!
 //! Provides the structures used relating to the pieces on the chessboard.
 
-use num_derive::FromPrimitive;
-
-use crate::board::Direction;
 use crate::error::ParseFenError;
+use crate::square::Direction;
+use num_derive::FromPrimitive;
 use std::{fmt, ops};
 
 /// Constants for all the types of chess pieces.
