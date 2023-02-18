@@ -1,3 +1,4 @@
+#[allow(clippy::wildcard_imports)]
 use crate::bitboards::constants::*;
 use crate::bitboards::Bitboard;
 use crate::error::ParseFenError;

@@ -6,7 +6,11 @@ use crate::position::{Position, PositionBitboards};
 use crate::r#move::{Move, MoveKind};
 use crate::square::{Square, BOARD_FILES, BOARD_RANKS};
 
-include!(concat!(env!("OUT_DIR"), "/generated_move_tables.rs"));
+#[allow(clippy::all, clippy::pedantic, clippy::nursery)]
+mod pregenerated {
+    include!(concat!(env!("OUT_DIR"), "/generated_move_tables.rs"));
+}
+use pregenerated::{BISHOP_MOVES, PAWN_MOVES, PSEUDO_ATTACKS, ROOK_MOVES};
 
 pub(crate) fn generate_legal_moves(position: &Position, bb: &PositionBitboards) -> Vec<Move> {
     let side = position.side_to_move;

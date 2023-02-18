@@ -22,9 +22,14 @@ fn generate_move_tables() -> std::io::Result<()> {
     );
     let mut out = File::create(Path::new(out_path.as_str()))?;
 
+    // Include dependencies
     writeln!(
         out,
         "use crate::gen_move_tables::{{PieceMoveBitboards, PawnMoveBitboards, MagicTable, Magic}};"
+    );
+    writeln!(
+        out,
+        "use crate::bitboards::Bitboard;"
     );
 
     {
@@ -33,7 +38,7 @@ fn generate_move_tables() -> std::io::Result<()> {
 
         writeln!(
             out,
-            "const PSEUDO_ATTACKS: PieceMoveBitboards = {:?};",
+            "pub(super) const PSEUDO_ATTACKS: PieceMoveBitboards = {:?};",
             pseudo_attacks
         )?;
     }
@@ -44,7 +49,7 @@ fn generate_move_tables() -> std::io::Result<()> {
 
         writeln!(
             out,
-            "const PAWN_MOVES: PawnMoveBitboards = {:?};",
+            "pub(super) const PAWN_MOVES: PawnMoveBitboards = {:?};",
             pawn_moves
         )?;
     }
@@ -54,7 +59,7 @@ fn generate_move_tables() -> std::io::Result<()> {
         let bishop_moves = init_bishop_moves();
         writeln!(
             out,
-            "const BISHOP_MOVES: MagicTable<512> = {:?};",
+            "pub(super) const BISHOP_MOVES: MagicTable<512> = {:?};",
             bishop_moves
         )?;
     }
@@ -65,7 +70,7 @@ fn generate_move_tables() -> std::io::Result<()> {
 
         writeln!(
             out,
-            "const ROOK_MOVES: MagicTable<4096> = {:?};",
+            "pub(super) const ROOK_MOVES: MagicTable<4096> = {:?};",
             rook_moves
         )?;
     }

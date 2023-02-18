@@ -1,3 +1,4 @@
+#[allow(clippy::wildcard_imports)]
 use crate::bitboards::constants::*;
 use crate::bitboards::Bitboard;
 use crate::piece::{PieceKind, Side, PIECE_KIND_COUNT, SIDE_COUNT};
@@ -331,12 +332,11 @@ impl<const SIZE: usize> MagicTable<SIZE> {
         magics: &[u64; BOARD_SIZE],
         relevant_bits: &[usize; BOARD_SIZE],
     ) -> Box<Self> {
-        // let mut magic_table = Box::<MagicTable<SIZE>>::default();
         let mut magic_table = unsafe {
             use std::alloc::{alloc, Layout};
 
             let layout = Layout::new::<Self>();
-            let ptr = alloc(layout) as *mut Self;
+            let ptr = alloc(layout).cast::<MagicTable<SIZE>>();
 
             Box::from_raw(ptr)
         };
