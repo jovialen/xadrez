@@ -1,3 +1,8 @@
+//! Chessboard squares.
+//!
+//! Provides the enum for the chessboard squares as well as constants relating
+//! to the squares on a chessboard.
+
 #[allow(clippy::wildcard_imports)]
 use crate::bitboards::constants::*;
 use crate::bitboards::Bitboard;

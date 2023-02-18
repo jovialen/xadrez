@@ -6,18 +6,15 @@ use crate::movegen;
 use crate::piece::{Piece, PieceKind, Side, PIECE_KIND_COUNT, SIDE_COUNT};
 use crate::square::{Square, BOARD_FILES, BOARD_SIZE};
 use itertools::Itertools;
-use lazy_static::lazy_static;
 use std::hash::Hash;
 use std::str::FromStr;
 use std::{fmt, ops};
 
-lazy_static! {
-    static ref ZOBRIST_PIECE_NUMS: [u64; BOARD_SIZE * PIECE_KIND_COUNT * 2] =
-        init_rand_nums::<u64, { BOARD_SIZE * PIECE_KIND_COUNT * 2 }>();
-    static ref ZOBRIST_BLACK_MOVE: u64 = rand::random::<u64>();
-    static ref ZOBRIST_CASTLING: [u64; 4] = init_rand_nums::<u64, 4>();
-    static ref ZOBRIST_EN_PASSANT: [u64; BOARD_FILES] = init_rand_nums::<u64, BOARD_FILES>();
+#[allow(clippy::all, clippy::pedantic, clippy::nursery)]
+mod pregenerated {
+    include!(concat!(env!("OUT_DIR"), "/generated_zobrist_hashes.rs"));
 }
+use pregenerated::{ZOBRIST_BLACK_MOVE, ZOBRIST_CASTLING, ZOBRIST_EN_PASSANT, ZOBRIST_PIECE_NUMS};
 
 pub(crate) const EMPTY_POSITION: Position = Position {
     squares: [None; BOARD_SIZE],
@@ -52,19 +49,6 @@ pub(crate) struct PositionBitboards {
     pub attacked_by: [[Bitboard; PIECE_KIND_COUNT]; SIDE_COUNT],
     pub attacked_by_2: [Bitboard; SIDE_COUNT],
     pub king_danger_squares: [Bitboard; SIDE_COUNT],
-}
-
-fn init_rand_nums<T, const SIZE: usize>() -> [T; SIZE]
-where
-    T: Default + Clone + Copy + From<u64>,
-{
-    let mut result = [T::default(); SIZE];
-
-    for v in result.iter_mut() {
-        *v = T::from(rand::random::<u64>());
-    }
-
-    result
 }
 
 impl Position {
@@ -119,7 +103,7 @@ impl Hash for Position {
         }
 
         if self.side_to_move == Side::Black {
-            hash ^= *ZOBRIST_BLACK_MOVE;
+            hash ^= ZOBRIST_BLACK_MOVE;
         }
 
         for (i, castling) in self.castling.iter().flatten().enumerate() {

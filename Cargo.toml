@@ -28,10 +28,8 @@ num = "0.4"
 num-derive = "0.3"
 num-traits = "0.2"
 itertools = "0.10.5"
-lazy_static = "1.4.0"
 nnue = { git = "https://github.com/analog-hors/nnue-rs", optional = true }
 binread = { version = "2", features = ["const_generics"] }
-rand = "0.8.5"
 
 [dev-dependencies]
 criterion = "0.4.0"
@@ -40,6 +38,7 @@ criterion = "0.4.0"
 num = "0.4"
 num-derive = "0.3"
 num-traits = "0.2"
+rand = "0.8.5"
 
 [[bench]]
 name = "perft"
