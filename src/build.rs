@@ -18,6 +18,8 @@ use std::io::Write;
 use std::path::Path;
 
 fn generate_move_tables() -> std::io::Result<()> {
+    println!("cargo:rerun-if-changed=./gen_move_tables.rs");
+
     let out_path = format!(
         "{}/{}",
         env::var("OUT_DIR").unwrap(),
