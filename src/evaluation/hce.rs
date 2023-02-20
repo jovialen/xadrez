@@ -898,14 +898,16 @@ const fn rook_threat(kind: PieceKind, end_game: bool) -> i32 {
 }
 
 #[inline]
-fn mobility_bonus(
+#[allow(clippy::cast_sign_loss)]
+const fn mobility_bonus(
     bb: &PositionBitboards,
     kind: PieceKind,
     side: Side,
     square: Square,
     end_game: bool,
 ) -> i32 {
-    if kind == PieceKind::King || kind == PieceKind::Pawn {
+    let k = kind as usize;
+    if k == KING || k == PAWN {
         0
     } else if end_game {
         END_GAME_MOBILITY[kind as usize - 1][mobility(bb, kind, side, square) as usize]
@@ -915,7 +917,8 @@ fn mobility_bonus(
 }
 
 #[inline]
-fn mobility(bb: &PositionBitboards, kind: PieceKind, side: Side, square: Square) -> i32 {
+#[allow(clippy::cast_possible_wrap)]
+const fn mobility(bb: &PositionBitboards, kind: PieceKind, side: Side, square: Square) -> i32 {
     (movegen::get_attacks_bitboard(kind, side, square, bb.occupied).0 & mobility_area(bb, side).0)
         .count_ones() as i32
 }
