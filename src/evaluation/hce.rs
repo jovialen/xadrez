@@ -945,6 +945,7 @@ const fn mobility_area(bb: &PositionBitboards, side: Side) -> Bitboard {
 }
 
 #[cfg(test)]
+#[allow(clippy::float_cmp)]
 mod tests {
     use super::*;
     use crate::board::Chessboard;
@@ -960,37 +961,36 @@ mod tests {
         assert_eq!(non_pawn_material(&board.bitboards, Side::White), 8302);
         assert_eq!(non_pawn_material(&board.bitboards, Side::Black), 8302);
 
-        let board =
-            Chessboard::from_fen("1n1qk1nr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
-                .expect("Valid fen");
+        let board = Chessboard::from_fen("1n1qk1nr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQ - 0 1")
+            .expect("Valid fen");
         assert_eq!(non_pawn_material(&board.bitboards, Side::White), 8302);
         assert_eq!(non_pawn_material(&board.bitboards, Side::Black), 5376);
     }
 
     #[test]
     fn test_scale_factor() {
-        let board = Chessboard::from_fen("3qkb2/2pp1ppp/8/8/8/8/PPP1PP2/3QKB2 w KQkq - 0 1")
+        let board = Chessboard::from_fen("3qkb2/2pp1ppp/8/8/8/8/PPP1PP2/3QKB2 w - - 0 1")
             .expect("Valid fen");
         assert_eq!(
             scale_factor_for_side(Side::White, &board.position, &board.bitboards),
             46.0
         );
 
-        let board = Chessboard::from_fen("4k3/2pP1ppp/3p4/8/8/8/PPP2P2/3QK3 b KQkq - 0 1")
-            .expect("Valid fen");
+        let board =
+            Chessboard::from_fen("4k3/2pP1ppp/3p4/8/8/8/PPP2P2/3QK3 b - - 0 1").expect("Valid fen");
         assert_eq!(
             scale_factor_for_side(Side::White, &board.position, &board.bitboards),
             37.0
         );
 
-        let board = Chessboard::from_fen("1nb1k3/2pP1ppp/3p4/8/8/8/PPP2P2/3QK3 b KQkq - 0 1")
+        let board = Chessboard::from_fen("1nb1k3/2pP1ppp/3p4/8/8/8/PPP2P2/3QK3 b - - 0 1")
             .expect("Valid fen");
         assert_eq!(
             scale_factor_for_side(Side::White, &board.position, &board.bitboards),
             43.0
         );
 
-        let board = Chessboard::from_fen("2b1k3/1Pp1Pppp/3Pp3/3p4/8/8/PPP3PP/2B1K3 b KQkq - 0 1")
+        let board = Chessboard::from_fen("2b1k3/1Pp1Pppp/3Pp3/3p4/8/8/PPP3PP/2B1K3 b - - 0 1")
             .expect("Valid fen");
         assert_eq!(
             scale_factor_for_side(Side::White, &board.position, &board.bitboards),
@@ -1027,7 +1027,7 @@ mod tests {
         assert_eq!(total_psqt(&board.position, Side::Black, false), 12);
 
         let board = Chessboard::from_fen(
-            "r1b1kb2/pp1p3p/2p2pp1/4p1q1/3P1P1r/2P3P1/PP2P2P/RNBQ1RK1 w Qkq - 0 3",
+            "r1b1kb2/pp1p3p/2p2pp1/4p1q1/3P1P1r/2P3P1/PP2P2P/RNBQ1RK1 w q - 0 3",
         )
         .expect("Valid fen");
         assert_eq!(total_psqt(&board.position, Side::White, false), 256);
