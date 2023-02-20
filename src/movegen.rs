@@ -34,7 +34,8 @@ pub(crate) fn generate_legal_moves(position: &Position, bb: &PositionBitboards) 
     result
 }
 
-pub(crate) fn get_attacks_bitboard(
+#[inline]
+pub(crate) const fn get_attacks_bitboard(
     kind: PieceKind,
     side: Side,
     square: Square,
@@ -43,7 +44,9 @@ pub(crate) fn get_attacks_bitboard(
     match kind {
         PieceKind::Bishop => BISHOP_MOVES.get(square, occupied),
         PieceKind::Rook => ROOK_MOVES.get(square, occupied),
-        PieceKind::Queen => BISHOP_MOVES.get(square, occupied) | ROOK_MOVES.get(square, occupied),
+        PieceKind::Queen => {
+            Bitboard(BISHOP_MOVES.get(square, occupied).0 | ROOK_MOVES.get(square, occupied).0)
+        }
         PieceKind::Pawn => PAWN_MOVES[side as usize][square as usize].1,
         _ => PSEUDO_ATTACKS[kind as usize][square as usize],
     }

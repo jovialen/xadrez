@@ -368,11 +368,11 @@ impl<const SIZE: usize> MagicTable<SIZE> {
         magic_table
     }
 
-    pub fn get(&self, origin: Square, occupied: Bitboard) -> Bitboard {
+    pub const fn get(&self, origin: Square, occupied: Bitboard) -> Bitboard {
         self.table[origin as usize][self.index_of(origin, occupied)]
     }
 
-    pub fn index_of(&self, origin: Square, occupied: Bitboard) -> usize {
+    pub const fn index_of(&self, origin: Square, occupied: Bitboard) -> usize {
         self.magics[origin as usize].index_of(occupied)
     }
 }
@@ -398,12 +398,12 @@ impl<const SIZE: usize> fmt::Debug for MagicTable<SIZE> {
 
 impl Magic {
     #[allow(clippy::cast_possible_truncation)]
-    fn index_of(&self, mut occupied: Bitboard) -> usize {
-        occupied &= self.mask;
-        occupied *= Bitboard(self.magic);
-        occupied >>= BOARD_SIZE - self.shift;
-
-        occupied.0 as usize
+    const fn index_of(&self, mut occupied: Bitboard) -> usize {
+        let mut result = occupied.0;
+        result &= self.mask.0;
+        result = result.wrapping_mul(self.magic);
+        result >>= BOARD_SIZE - self.shift;
+        result as usize
     }
 }
 
