@@ -125,7 +125,6 @@ impl MoveSearcher {
 
         'search: for depth in 0..max_depth {
             let (mut best_iteration_move, mut best_iteration_score) = (None, -i32::MAX);
-            self.transposition.clear();
 
             for (i, &m) in moves.iter().enumerate() {
                 self.board.make_move(m).expect("All moves should be legal");
