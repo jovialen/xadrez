@@ -20,7 +20,13 @@ pub struct MoveSearcher {
     debug: bool,
 
     data: SearchData,
-    transposition: HashMap<Position, i32>,
+    transposition: HashMap<Position, TranspositionEntry>,
+}
+
+#[derive(Default)]
+struct TranspositionEntry {
+    at_depth: usize,
+    score: i32,
 }
 
 /// Output data from a move search with the [`MoveSearcher::search`].
@@ -189,9 +195,11 @@ impl MoveSearcher {
     }
 
     fn alpha_beta(&mut self, depth: usize, mut alpha: i32, beta: i32) -> i32 {
-        if let Some(value) = self.transposition.get(&self.board.position) {
-            self.data.transposition_hits += 1;
-            return *value;
+        if let Some(entry) = self.transposition.get(&self.board.position) {
+            if entry.at_depth >= depth {
+                self.data.transposition_hits += 1;
+                return entry.score;
+            }
         }
 
         let mut moves = self.board.moves().clone();
@@ -211,22 +219,19 @@ impl MoveSearcher {
 
             if score >= beta {
                 self.data.prunes += 1;
-                self.transposition.insert(self.board.position, beta);
+                self.transposition
+                    .insert(self.board.position, TranspositionEntry::new(depth, beta));
                 return beta;
             }
             alpha = alpha.max(score);
         }
 
-        self.transposition.insert(self.board.position, alpha);
+        self.transposition
+            .insert(self.board.position, TranspositionEntry::new(depth, alpha));
         alpha
     }
 
     fn quiesce(&mut self, mut alpha: i32, beta: i32) -> i32 {
-        if let Some(score) = self.transposition.get(&self.board.position) {
-            self.data.transposition_hits += 1;
-            return alpha.max(*score);
-        }
-
         let evaluation = self.board.evaluate_relative();
         if evaluation >= beta {
             self.data.prunes += 1;
@@ -257,19 +262,23 @@ impl MoveSearcher {
 
             if score >= beta {
                 self.data.prunes += 1;
-                self.transposition.insert(self.board.position, beta);
                 return beta;
             }
             alpha = alpha.max(score);
         }
 
-        self.transposition.insert(self.board.position, alpha);
         alpha
     }
 }
 
+impl TranspositionEntry {
+    fn new(at_depth: usize, score: i32) -> Self {
+        Self { at_depth, score }
+    }
+}
+
 impl SearchData {
-    pub(crate) fn new() -> Self {
+    fn new() -> Self {
         Self {
             best_move: None,
             score: 0,
