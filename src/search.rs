@@ -197,7 +197,7 @@ impl MoveSearcher {
         if let Some(entry) = self.transposition.get(&self.board.position) {
             if entry.at_depth >= depth {
                 self.data.transposition_hits += 1;
-                return entry.score;
+                return alpha.max(beta.min(entry.score));
             }
         }
 
