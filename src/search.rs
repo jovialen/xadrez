@@ -123,7 +123,7 @@ impl MoveSearcher {
 
             for (i, &m) in moves.iter().enumerate() {
                 self.board.make_move(m).expect("All moves should be legal");
-                scores[i] = -self.mtdf(-scores[i], depth);
+                scores[i] = -self.alpha_beta(depth, -i32::MAX, i32::MAX);
                 self.board.undo();
 
                 if scores[i] > best_iteration_score {
@@ -186,25 +186,6 @@ impl MoveSearcher {
         }
 
         -score
-    }
-
-    fn mtdf(&mut self, mut f: i32, depth: usize) -> i32 {
-        let mut upper = i32::MAX;
-        let mut lower = -i32::MAX;
-
-        while lower < upper {
-            let beta = f.max(lower + 1);
-
-            f = self.alpha_beta(depth, beta - 1, beta);
-
-            if f < beta {
-                upper = f;
-            } else {
-                lower = f;
-            }
-        }
-
-        f
     }
 
     fn alpha_beta(&mut self, depth: usize, mut alpha: i32, beta: i32) -> i32 {
