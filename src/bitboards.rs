@@ -112,7 +112,11 @@ impl Bitboard {
 
     #[inline]
     pub const fn more_than_one(self) -> bool {
-        self.0 & (self.0 - 1) != 0
+        if self.0 == 0 {
+            false
+        } else {
+            self.0 & (self.0 - 1) != 0
+        }
     }
 }
 

@@ -11,8 +11,8 @@ use crate::piece::{Piece, PieceKind, Side, PIECE_KIND_COUNT, SIDE_COUNT};
 use crate::position::{Position, PositionBitboards};
 use crate::square::{Direction, Square, BOARD_FILES, BOARD_RANKS};
 
-const EARLY_GAME_VALUES: [i32; PIECE_KIND_COUNT] = [i32::MAX, 2538, 825, 781, 1276, 124];
-const END_GAME_VALUES: [i32; PIECE_KIND_COUNT] = [i32::MAX, 2682, 915, 854, 1380, 206];
+const EARLY_GAME_VALUES: [i32; PIECE_KIND_COUNT] = [10_000_000, 2538, 825, 781, 1276, 124];
+const END_GAME_VALUES: [i32; PIECE_KIND_COUNT] = [10_000_000, 2682, 915, 854, 1380, 206];
 
 const EARLY_GAME_PSQT: [[[i32; BOARD_FILES / 2]; BOARD_RANKS]; PIECE_KIND_COUNT - 1] = [
     [
@@ -461,8 +461,14 @@ fn threats(position: &Position, bb: &PositionBitboards, side: Side, end_game: bo
         safe_pawn_attacks |= pawn_push & non_pawn_hostile;
     }
 
-    pawns = (bb.pieces[friendly][PAWN] << side.forward().offset()) & !bb.occupied;
-    pawns |= ((pawns & PUSH_RANK[friendly]) << side.forward().offset()) & !bb.occupied;
+    let forward = side.forward().offset();
+    if forward > 0 {
+        pawns = (bb.pieces[friendly][PAWN] << forward) & !bb.occupied;
+        pawns |= ((pawns & PUSH_RANK[friendly]) << forward) & !bb.occupied;
+    } else {
+        pawns = (bb.pieces[friendly][PAWN] >> -forward) & !bb.occupied;
+        pawns |= ((pawns & PUSH_RANK[friendly]) >> -forward) & !bb.occupied;
+    }
     pawns &= !bb.attacked_by[hostile][PAWN] & safe_squares;
 
     let mut safe_pawn_pushes = Bitboard(0);
@@ -510,6 +516,7 @@ fn threats(position: &Position, bb: &PositionBitboards, side: Side, end_game: bo
     score
 }
 
+#[inline]
 fn king(position: &Position, bb: &PositionBitboards, side: Side, end_game: bool) -> i32 {
     if end_game {
         king_end_game(position, bb, side)
@@ -539,13 +546,26 @@ fn space(bb: &PositionBitboards, side: Side, end_game: bool) -> i32 {
     let safe_squares =
         SPACE_MASK[friendly] & !bb.pieces[friendly][PAWN] & !bb.attacked_by[hostile][PAWN];
 
-    let mut behind = bb.pieces[friendly][PAWN];
-    behind |= behind << side.backward().offset();
-    behind |= behind << (side.backward().offset() * 2);
+    let backward = side.backward().offset();
+    let forward = side.forward().offset();
 
-    let blocked_count = ((bb.pieces[friendly][PAWN] << side.forward().offset())
-        & bb.pieces[hostile][PAWN])
-        .pop_count();
+    let mut behind = bb.pieces[friendly][PAWN];
+    if backward <= 0 {
+        behind |= behind >> -backward;
+        behind |= behind >> (-backward * 2);
+    } else {
+        behind |= behind << backward;
+        behind |= behind << (backward * 2);
+    }
+
+    let mut in_front = bb.pieces[friendly][PAWN];
+    if forward >= 0 {
+        in_front <<= forward;
+    } else {
+        in_front >>= -forward;
+    }
+
+    let blocked_count = (in_front & bb.pieces[hostile][PAWN]).pop_count();
 
     let bonus =
         safe_squares.pop_count() + (behind & safe_squares & !bb.attacked[hostile]).pop_count();
