@@ -119,13 +119,13 @@ fn play<'a, I: Iterator<Item = &'a str>>(board: &mut xadrez::board::Chessboard, 
             return;
         }
 
-        if let Some(best) = MoveSearcher::new(board)
+        let search_data = MoveSearcher::new(board)
             .max_time(Duration::from_millis(time_ms))
             .max_depth(depth)
-            .search()
-            .best_move
-        {
-            println!("{best}");
+            .search();
+
+        if let Some(best) = search_data.best_move {
+            println!("{best} ({})", search_data.depth);
 
             board
                 .make_move(best)
