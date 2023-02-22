@@ -117,8 +117,6 @@ impl MoveSearcher {
         let max_depth = self.depth.unwrap_or(usize::MAX).max(1);
 
         let moves = self.board.moves().clone();
-        let mut scores = vec![0; moves.len()];
-
         if moves.is_empty() {
             return self.data;
         }
@@ -126,13 +124,13 @@ impl MoveSearcher {
         'search: for depth in 0..max_depth {
             let (mut best_iteration_move, mut best_iteration_score) = (None, -i32::MAX);
 
-            for (i, &m) in moves.iter().enumerate() {
+            for &m in &moves {
                 self.board.make_move(m).expect("All moves should be legal");
-                scores[i] = -self.alpha_beta(depth, -i32::MAX, i32::MAX);
+                let score = -self.alpha_beta(depth, -i32::MAX, i32::MAX);
                 self.board.undo();
 
-                if scores[i] > best_iteration_score {
-                    best_iteration_score = scores[i];
+                if score > best_iteration_score {
+                    best_iteration_score = score;
                     best_iteration_move = Some(m);
                 }
 
@@ -155,8 +153,8 @@ impl MoveSearcher {
                 self.data.best_move = best_iteration_move;
                 self.data.score = best_iteration_score;
 
-                // If checkmate is found
-                if best_iteration_score >= 10_000_000 {
+                // If forced checkmate is found
+                if best_iteration_score.abs() >= 10_000_000 {
                     break 'search;
                 }
             }
