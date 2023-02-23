@@ -11,7 +11,7 @@
 mod bitboards;
 pub mod board;
 pub mod error;
-mod evaluation;
+pub mod evaluation;
 pub mod fen;
 #[allow(unused)]
 mod gen_move_tables;

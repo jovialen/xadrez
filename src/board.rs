@@ -3,6 +3,7 @@
 //! Provides the structures relating to the chessboard as a whole.
 
 use crate::error::{MoveError, ParseFenError};
+use crate::evaluation::score::Evaluation;
 use crate::fen::FEN_STARTING_POSITION;
 use crate::piece::{Piece, PieceKind, Side, SIDE_COUNT};
 use crate::position::{Position, PositionBitboards, EMPTY_POSITION};
@@ -268,39 +269,16 @@ impl Chessboard {
 
     /// Check if the side to move is currently in check.
     #[must_use]
+    #[inline]
     pub fn in_check(&self) -> bool {
         self.bitboards.count_checkers() > 0
     }
 
-    /// Evaluate the current position.
-    ///
-    /// The position will be evaluated from the perspective of white and return
-    /// the advantage in approximate centi-pawns.
-    #[must_use]
-    pub fn evaluate(&self) -> i32 {
-        let relative_to_side = self.evaluate_relative();
-        match self.position.side_to_move {
-            Side::White => relative_to_side,
-            Side::Black => -relative_to_side,
-        }
-    }
-
     /// Evaluate the current position relative to the side to move.
-    ///
-    /// The position will be evaluated from the perspective of the side to move
-    /// and return the advantage in approximate centi-pawns.
     #[must_use]
-    pub fn evaluate_relative(&self) -> i32 {
-        let state = self.state();
-
-        if state == GameState::Playing {
-            evaluation::evaluate_position(&self.position, &self.bitboards)
-        } else if state == GameState::Checkmate {
-            -i32::MAX
-        } else {
-            // Its a draw
-            0
-        }
+    #[inline]
+    pub fn evaluate(&self) -> Evaluation {
+        evaluation::evaluate_position(self.state(), &self.position, &self.bitboards)
     }
 
     /// Perft move enumeration function.
@@ -347,6 +325,7 @@ impl Chessboard {
     ///
     /// * `m` - The move to validate.
     #[must_use]
+    #[inline]
     pub fn is_legal(&self, m: Move) -> bool {
         self.legal_moves.contains(&m)
     }
@@ -357,6 +336,7 @@ impl Chessboard {
     /// of squares. The array is laid out such that it can be directly
     /// indexed with the integer values of the [`Square`] enum.
     #[must_use]
+    #[inline]
     pub fn squares(&self) -> &[Option<Piece>; BOARD_SIZE] {
         &self.position.squares
     }
@@ -366,8 +346,16 @@ impl Chessboard {
     /// This function returns a vector of all the pieces on the board in a toupe
     /// with its position on the board.
     #[must_use]
+    #[inline]
     pub fn pieces(&self) -> Vec<(Piece, Square)> {
         self.position.pieces()
+    }
+
+    /// Get the current side to move.
+    #[must_use]
+    #[inline]
+    pub const fn side_to_move(&self) -> Side {
+        self.position.side_to_move
     }
 
     fn save_current_to_history(&mut self) {

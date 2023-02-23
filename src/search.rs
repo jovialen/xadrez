@@ -5,6 +5,7 @@
 
 use crate::board::Chessboard;
 use crate::evaluation;
+use crate::evaluation::score::Evaluation;
 use crate::piece::PieceKind;
 use crate::position::Position;
 use crate::r#move::{Move, MoveKind};
@@ -26,7 +27,7 @@ pub struct MoveSearcher {
 #[derive(Default)]
 struct TranspositionEntry {
     at_depth: usize,
-    score: i32,
+    score: Evaluation,
 }
 
 /// Output data from a move search with the [`MoveSearcher::search`].
@@ -41,7 +42,7 @@ pub struct SearchData {
     ///
     /// The score is the expected relative evaluation [`SearchData::depth`]
     /// moves in the future.
-    pub score: i32,
+    pub score: Evaluation,
     /// How many moves into the future the search looked.
     pub depth: usize,
     /// When the search started.
@@ -115,6 +116,7 @@ impl MoveSearcher {
     #[must_use]
     pub fn search(mut self) -> SearchData {
         let max_depth = self.depth.unwrap_or(usize::MAX).max(1);
+        let side = self.board.position.side_to_move;
 
         let moves = self.board.moves().clone();
         if moves.is_empty() {
@@ -122,11 +124,11 @@ impl MoveSearcher {
         }
 
         'search: for depth in 0..max_depth {
-            let (mut best_iteration_move, mut best_iteration_score) = (None, -i32::MAX);
+            let (mut best_iteration_move, mut best_iteration_score) = (None, Evaluation::min(side));
 
             for &m in &moves {
                 self.board.make_move(m).expect("All moves should be legal");
-                let score = -self.alpha_beta(depth, -i32::MAX, i32::MAX);
+                let score = -self.alpha_beta(depth, Evaluation::min(side), Evaluation::max(side));
                 self.board.undo();
 
                 if score > best_iteration_score {
@@ -154,7 +156,7 @@ impl MoveSearcher {
                 self.data.score = best_iteration_score;
 
                 // If forced checkmate is found
-                if best_iteration_score.abs() >= 10_000_000 {
+                if best_iteration_score.is_mate() {
                     break 'search;
                 }
             }
@@ -191,7 +193,7 @@ impl MoveSearcher {
         -score
     }
 
-    fn alpha_beta(&mut self, depth: usize, mut alpha: i32, beta: i32) -> i32 {
+    fn alpha_beta(&mut self, depth: usize, mut alpha: Evaluation, beta: Evaluation) -> Evaluation {
         if let Some(entry) = self.transposition.get(&self.board.position) {
             if entry.at_depth >= depth {
                 self.data.transposition_hits += 1;
@@ -228,8 +230,8 @@ impl MoveSearcher {
         alpha
     }
 
-    fn quiesce(&mut self, mut alpha: i32, beta: i32) -> i32 {
-        let evaluation = self.board.evaluate_relative();
+    fn quiesce(&mut self, mut alpha: Evaluation, beta: Evaluation) -> Evaluation {
+        let evaluation = self.board.evaluate();
         if evaluation >= beta {
             self.data.prunes += 1;
             return beta;
@@ -247,7 +249,7 @@ impl MoveSearcher {
 
         #[allow(clippy::cast_possible_wrap)]
         if moves.is_empty() {
-            return evaluation + self.board.position.fulltime as i32;
+            return evaluation;
         }
 
         for m in moves {
@@ -269,7 +271,7 @@ impl MoveSearcher {
 }
 
 impl TranspositionEntry {
-    fn new(at_depth: usize, score: i32) -> Self {
+    fn new(at_depth: usize, score: Evaluation) -> Self {
         Self { at_depth, score }
     }
 }
@@ -278,7 +280,7 @@ impl SearchData {
     fn new() -> Self {
         Self {
             best_move: None,
-            score: 0,
+            score: Evaluation::default(),
             depth: 0,
             start_time: Instant::now(),
             duration: Duration::default(),

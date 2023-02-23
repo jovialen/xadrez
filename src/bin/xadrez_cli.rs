@@ -161,7 +161,7 @@ fn main() {
             Some("moves") => print_moves(&chessboard, tokens),
             Some("perft") => perft(&mut chessboard, tokens),
             Some("undo") => chessboard.undo(),
-            Some("evaluate") => println!("{}", chessboard.evaluate()),
+            Some("evaluate") => println!("{}", chessboard.evaluate().absolute_pawns()),
             Some("state") => println!("{}", chessboard.state()),
             Some("search") => search(&chessboard, tokens),
             Some("play") => play(&mut chessboard, tokens),
