@@ -283,9 +283,10 @@ fn scale_factor_for_side(side: Side, position: &Position, bb: &PositionBitboards
         } else if are_opposite_bishops {
             22.0 + 3.0 * bb.sides[WHITE].pop_count() as f64
         } else {
+            #[allow(clippy::cast_possible_wrap)]
             if f_npm == EARLY_GAME_ROOK_VALUE
                 && h_npm == EARLY_GAME_ROOK_VALUE
-                && f_pawns - h_pawns <= 1
+                && f_pawns as isize - h_pawns as isize <= 1
             {
                 let mut h_pawnking = false;
                 let mut pcf_flank = [0, 0];
