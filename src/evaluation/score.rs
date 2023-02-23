@@ -147,7 +147,7 @@ impl std::fmt::Display for Evaluation {
             Some(PositionPrediction::Draw) => write!(f, "draw"),
             Some(PositionPrediction::MateIn(moves)) => write!(f, "win in {moves}"),
             Some(PositionPrediction::MatedIn(moves)) => write!(f, "lose in {moves}"),
-            None => write!(f, "{}", self.score),
+            None => write!(f, "{}", self.absolute_pawns()),
         }
     }
 }

@@ -123,12 +123,13 @@ impl MoveSearcher {
             return self.data;
         }
 
-        'search: for depth in 0..max_depth {
+        'search: for depth in 1..max_depth {
             let (mut best_iteration_move, mut best_iteration_score) = (None, Evaluation::min(side));
 
             for &m in &moves {
                 self.board.make_move(m).expect("All moves should be legal");
-                let score = -self.alpha_beta(depth, Evaluation::min(side), Evaluation::max(side));
+                let score =
+                    -self.alpha_beta(depth - 1, Evaluation::min(side), Evaluation::max(side));
                 self.board.undo();
 
                 if score > best_iteration_score {
@@ -160,6 +161,7 @@ impl MoveSearcher {
                     break 'search;
                 }
             }
+
             self.data.depth = depth;
         }
 
