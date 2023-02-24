@@ -70,20 +70,21 @@ impl Score {
 
     /// Check if the evaluation results in checkmate.
     #[must_use]
-    pub fn is_mate(&self) -> bool {
-        self.prediction.map_or(false, |v| {
+    pub const fn is_mate(&self) -> bool {
+        if let Some(prediction) = self.prediction {
             matches!(
-                v,
+                prediction,
                 PositionPrediction::Checkmate
                     | PositionPrediction::MateIn(_)
                     | PositionPrediction::MatedIn(_)
             )
-        })
+        } else {
+            false
+        }
     }
 
-    /// Get the best possible score for the given side.
     #[must_use]
-    pub fn max(relative_to: Side) -> Self {
+    pub(crate) const fn max(relative_to: Side) -> Self {
         Self {
             relative_to,
             score: i32::MAX,
@@ -91,9 +92,8 @@ impl Score {
         }
     }
 
-    /// Get the worst possible score for the given side.
     #[must_use]
-    pub const fn min(relative_to: Side) -> Self {
+    pub(crate) const fn min(relative_to: Side) -> Self {
         Self {
             relative_to,
             score: -i32::MAX,
@@ -101,10 +101,12 @@ impl Score {
         }
     }
 
-    pub(crate) fn increment_depth(self) -> Self {
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    pub(crate) const fn mated_in(relative_to: Side, moves: usize) -> Self {
         Self {
-            prediction: self.prediction.map(PositionPrediction::increment_depth),
-            ..self
+            relative_to,
+            score: -i32::MAX + moves as i32,
+            prediction: Some(PositionPrediction::MatedIn(moves)),
         }
     }
 }
@@ -135,6 +137,30 @@ impl std::ops::Neg for Score {
     }
 }
 
+impl std::ops::Add<i32> for Score {
+    type Output = Self;
+
+    fn add(self, rhs: i32) -> Self::Output {
+        Self {
+            score: self.score + rhs,
+            prediction: self.prediction.and_then(|v| v + rhs),
+            ..self
+        }
+    }
+}
+
+impl std::ops::Sub<i32> for Score {
+    type Output = Self;
+
+    fn sub(self, rhs: i32) -> Self::Output {
+        Self {
+            score: self.score - rhs,
+            prediction: self.prediction.and_then(|v| v - rhs),
+            ..self
+        }
+    }
+}
+
 impl Default for Score {
     fn default() -> Self {
         Self {
@@ -157,17 +183,6 @@ impl std::fmt::Display for Score {
     }
 }
 
-impl PositionPrediction {
-    const fn increment_depth(self) -> Self {
-        match self {
-            Self::MateIn(moves) => Self::MateIn(moves + 1),
-            Self::MatedIn(moves) => Self::MatedIn(moves + 1),
-            Self::Draw => Self::Draw,
-            Self::Checkmate => Self::MatedIn(1),
-        }
-    }
-}
-
 impl std::ops::Neg for PositionPrediction {
     type Output = Self;
 
@@ -182,70 +197,54 @@ impl std::ops::Neg for PositionPrediction {
     }
 }
 
+impl std::ops::Add<i32> for PositionPrediction {
+    type Output = Option<Self>;
+
+    #[allow(clippy::cast_sign_loss)]
+    fn add(self, rhs: i32) -> Self::Output {
+        if rhs < 0 {
+            self - rhs
+        } else {
+            match self {
+                Self::MateIn(moves) => {
+                    Some(Self::MateIn(moves.checked_sub(rhs as usize).unwrap_or(1)))
+                }
+                Self::MatedIn(moves) => Some(Self::MatedIn(moves + rhs as usize)),
+                Self::Checkmate if rhs > 0 => Some(Self::MatedIn(rhs as usize)),
+                Self::Checkmate => Some(Self::Checkmate),
+                Self::Draw => None,
+            }
+        }
+    }
+}
+
+impl std::ops::Sub<i32> for PositionPrediction {
+    type Output = Option<Self>;
+
+    #[allow(
+        clippy::cast_sign_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_possible_wrap
+    )]
+    fn sub(self, rhs: i32) -> Self::Output {
+        if rhs < 0 {
+            self + rhs
+        } else {
+            match self {
+                Self::MateIn(moves) => Some(Self::MateIn(moves + rhs as usize)),
+                Self::MatedIn(moves) if moves as i32 > rhs => {
+                    Some(Self::MatedIn((moves as i32 - rhs) as usize))
+                }
+                Self::MatedIn(_) | PositionPrediction::Checkmate => Some(Self::Checkmate),
+                Self::Draw => None,
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_score_last() {
-        let s = Score {
-            relative_to: Side::White,
-            score: -2000,
-            prediction: Some(PositionPrediction::Checkmate),
-        };
-
-        let s = -s.increment_depth();
-        assert_eq!(
-            s,
-            Score {
-                relative_to: Side::Black,
-                score: 2000,
-                prediction: Some(PositionPrediction::MateIn(1)),
-            }
-        );
-
-        let s = -s.increment_depth();
-        assert_eq!(
-            s,
-            Score {
-                relative_to: Side::White,
-                score: -2000,
-                prediction: Some(PositionPrediction::MatedIn(2)),
-            }
-        );
-
-        assert_eq!(
-            -s.increment_depth(),
-            Score {
-                relative_to: Side::Black,
-                score: 2000,
-                prediction: Some(PositionPrediction::MateIn(3)),
-            }
-        );
-        assert_eq!(
-            s,
-            Score {
-                relative_to: Side::White,
-                score: -2000,
-                prediction: Some(PositionPrediction::MatedIn(2)),
-            }
-        );
-
-        let s = Score {
-            relative_to: Side::Black,
-            score: 1234,
-            prediction: None,
-        };
-
-        assert_eq!(
-            -s.increment_depth(),
-            Score {
-                relative_to: Side::White,
-                score: -1234,
-                prediction: None,
-            }
-        );
-    }
 
     #[test]
     fn test_score_numeric() {

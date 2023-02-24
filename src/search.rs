@@ -135,9 +135,7 @@ impl MoveSearcher {
 
             for &m in &moves {
                 self.board.make_move(m).expect("All moves should be legal");
-                let score = -self
-                    .alpha_beta(depth, Score::min(!side), Score::max(!side))
-                    .increment_depth();
+                let score = -self.pv_search(Score::min(!side), Score::max(!side), depth, 0);
                 self.board.undo();
 
                 if score > best_iteration_score {
@@ -211,70 +209,137 @@ impl MoveSearcher {
         if let Some(entry) = self.transposition.get(&self.board.position) {
             if entry.best_move == Some(m) && self.board.is_legal(m) {
                 // Always search hash moves first
-                score += 10_000;
+                score += 100_000;
             }
         }
 
         -score
     }
 
-    fn alpha_beta(&mut self, depth: usize, mut alpha: Score, beta: Score) -> Score {
-        if let Some(entry) = self.transposition.get(&self.board.position) {
-            if entry.at_depth >= depth {
-                self.data.transposition_hits += 1;
-                match entry.node_type {
-                    NodeType::Pv => return entry.score,
-                    NodeType::Cut if entry.score >= beta => return entry.score,
-                    NodeType::All if entry.score <= alpha => return entry.score,
-                    _ => (),
-                }
-                self.data.transposition_hits -= 1;
-            }
+    #[inline]
+    fn evaluate(&self, distance_from_root: usize) -> Score {
+        let evaluation = self.board.evaluate();
+        if evaluation.is_mate() {
+            Score::mated_in(evaluation.relative_to, distance_from_root)
+        } else {
+            evaluation
+        }
+    }
+
+    #[inline]
+    fn fetch_transposition(&self, alpha: Score, beta: Score, depth: usize) -> Option<Score> {
+        let entry = self
+            .transposition
+            .get(&self.board.position)
+            .filter(|e| e.at_depth >= depth)?;
+
+        match entry.node_type {
+            NodeType::Pv => Some(entry.score),
+            NodeType::Cut if entry.score >= beta => Some(entry.score),
+            NodeType::All if entry.score <= alpha => Some(entry.score),
+            _ => None,
+        }
+    }
+
+    fn pv_search(
+        &mut self,
+        mut alpha: Score,
+        beta: Score,
+        depth: usize,
+        distance_from_root: usize,
+    ) -> Score {
+        self.data.nodes += 1;
+
+        if depth == 0 {
+            return self.quiesce(alpha, beta, distance_from_root);
         }
 
         let mut moves = self.board.moves().clone();
-
-        if depth == 0 || moves.is_empty() {
-            return self.quiesce(alpha, beta);
-        }
-
         moves.sort_by_key(|m| self.score_move(*m));
 
         let mut best_move = None;
-        let mut node_type = NodeType::All;
         for m in moves {
-            self.data.nodes += 1;
+            self.board.make_move(m).expect("Legal move");
 
-            self.board.make_move(m).expect("All moves should be legal");
-            let score = -self.alpha_beta(depth - 1, -beta, -alpha).increment_depth();
+            let score = if best_move.is_none() {
+                -self.pv_search(-beta, -alpha, depth - 1, distance_from_root + 1)
+            } else {
+                let mut score = -self.zw_search(-alpha, depth - 1, distance_from_root + 1);
+                if score > alpha && score < beta {
+                    score = -self.pv_search(-beta, -alpha, depth - 1, distance_from_root + 1);
+                }
+                score
+            };
+
             self.board.undo();
 
             if score >= beta {
-                self.data.prunes += 1;
                 self.transposition.insert(
                     self.board.position,
                     TranspositionEntry::new(depth, beta, NodeType::Cut, Some(m)),
                 );
+
+                self.data.prunes += 1;
                 return beta;
             }
 
             if score > alpha {
-                node_type = NodeType::Pv;
                 alpha = score;
                 best_move = Some(m);
             }
-            alpha = alpha.max(score);
         }
 
         self.transposition.insert(
             self.board.position,
-            TranspositionEntry::new(depth, alpha, node_type, best_move),
+            TranspositionEntry::new(depth, alpha, NodeType::Pv, best_move),
         );
         alpha
     }
 
-    fn quiesce(&mut self, mut alpha: Score, beta: Score) -> Score {
-        let evaluation = self.board.evaluate();
+    fn zw_search(&mut self, beta: Score, depth: usize, distance_from_root: usize) -> Score {
+        self.data.nodes += 1;
+
+        let alpha = beta - 1;
+
+        if let Some(score) = self.fetch_transposition(alpha, beta, depth) {
+            self.data.transposition_hits += 1;
+            return score;
+        }
+
+        if depth == 0 {
+            return self.quiesce(alpha, beta, distance_from_root);
+        }
+
+        let mut moves = self.board.moves().clone();
+        moves.sort_by_key(|m| self.score_move(*m));
+
+        for m in moves {
+            self.board.make_move(m).expect("Legal move");
+            let score = -self.zw_search(-beta + 1, depth - 1, distance_from_root + 1);
+            self.board.undo();
+
+            if score >= beta {
+                self.transposition.insert(
+                    self.board.position,
+                    TranspositionEntry::new(depth, beta, NodeType::Cut, Some(m)),
+                );
+
+                self.data.prunes += 1;
+                return beta;
+            }
+        }
+
+        self.transposition.insert(
+            self.board.position,
+            TranspositionEntry::new(depth, alpha, NodeType::All, None),
+        );
+        alpha
+    }
+
+    fn quiesce(&mut self, mut alpha: Score, beta: Score, distance_from_root: usize) -> Score {
+        self.data.nodes += 1;
+
+        let evaluation = self.evaluate(distance_from_root);
         if evaluation >= beta {
             self.data.prunes += 1;
             return beta;
@@ -290,16 +355,13 @@ impl MoveSearcher {
             .sorted_by_key(|m| -self.exchange(*m))
             .collect();
 
-        #[allow(clippy::cast_possible_wrap)]
         if moves.is_empty() {
             return evaluation;
         }
 
         for m in moves {
-            self.data.nodes += 1;
-
-            self.board.make_move(m).expect("All moves should be legal");
-            let score = -self.quiesce(-beta, -alpha).increment_depth();
+            self.board.make_move(m).expect("Legal move");
+            let score = -self.quiesce(-beta, -alpha, distance_from_root + 1);
             self.board.undo();
 
             if score >= beta {
