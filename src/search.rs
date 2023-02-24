@@ -24,11 +24,17 @@ pub struct MoveSearcher {
     transposition: HashMap<Position, TranspositionEntry>,
 }
 
-#[derive(Default)]
 struct TranspositionEntry {
     at_depth: usize,
     score: Score,
+    node_type: NodeType,
     best_move: Option<Move>,
+}
+
+enum NodeType {
+    Pv,
+    Cut,
+    All,
 }
 
 /// Output data from a move search with the [`MoveSearcher::search`].
@@ -208,7 +214,13 @@ impl MoveSearcher {
         if let Some(entry) = self.transposition.get(&self.board.position) {
             if entry.at_depth >= depth {
                 self.data.transposition_hits += 1;
-                return alpha.max(beta.min(entry.score));
+                match entry.node_type {
+                    NodeType::Pv => return entry.score,
+                    NodeType::Cut if entry.score >= beta => return entry.score,
+                    NodeType::All if entry.score <= alpha => return entry.score,
+                    _ => (),
+                }
+                self.data.transposition_hits -= 1;
             }
         }
 
@@ -221,6 +233,7 @@ impl MoveSearcher {
         moves.sort_by_key(|m| self.score_move(*m));
 
         let mut best_move = None;
+        let mut node_type = NodeType::All;
         for m in moves {
             self.data.nodes += 1;
 
@@ -232,12 +245,13 @@ impl MoveSearcher {
                 self.data.prunes += 1;
                 self.transposition.insert(
                     self.board.position,
-                    TranspositionEntry::new(depth, beta, Some(m)),
+                    TranspositionEntry::new(depth, beta, NodeType::Cut, Some(m)),
                 );
                 return beta;
             }
 
             if score > alpha {
+                node_type = NodeType::Pv;
                 alpha = score;
                 best_move = Some(m);
             }
@@ -246,7 +260,7 @@ impl MoveSearcher {
 
         self.transposition.insert(
             self.board.position,
-            TranspositionEntry::new(depth, alpha, best_move),
+            TranspositionEntry::new(depth, alpha, node_type, best_move),
         );
         alpha
     }
@@ -292,10 +306,11 @@ impl MoveSearcher {
 }
 
 impl TranspositionEntry {
-    fn new(at_depth: usize, score: Score, best_move: Option<Move>) -> Self {
+    fn new(at_depth: usize, score: Score, node_type: NodeType, best_move: Option<Move>) -> Self {
         Self {
             at_depth,
             score,
+            node_type,
             best_move,
         }
     }
