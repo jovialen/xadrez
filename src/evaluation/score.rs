@@ -101,23 +101,24 @@ impl Evaluation {
         }
     }
 
-    pub(crate) fn last(&self) -> Self {
+    pub(crate) fn increment_depth(self) -> Self {
         Self {
-            relative_to: !self.relative_to,
-            score: -self.score,
-            prediction: self.prediction.map(PositionPrediction::last),
+            prediction: self.prediction.map(PositionPrediction::increment_depth),
+            ..self
         }
     }
 }
 
 impl Ord for Evaluation {
     fn cmp(&self, rhs: &Self) -> std::cmp::Ordering {
+        assert_eq!(self.relative_to, rhs.relative_to);
         self.centi_pawns().cmp(&rhs.centi_pawns())
     }
 }
 
 impl PartialOrd for Evaluation {
     fn partial_cmp(&self, rhs: &Self) -> std::option::Option<std::cmp::Ordering> {
+        assert_eq!(self.relative_to, rhs.relative_to);
         self.centi_pawns().partial_cmp(&rhs.centi_pawns())
     }
 }
@@ -126,7 +127,11 @@ impl std::ops::Neg for Evaluation {
     type Output = Self;
 
     fn neg(self) -> Self::Output {
-        self.last()
+        Self {
+            relative_to: !self.relative_to,
+            score: -self.score,
+            prediction: self.prediction.map(|v| -v),
+        }
     }
 }
 
@@ -153,12 +158,26 @@ impl std::fmt::Display for Evaluation {
 }
 
 impl PositionPrediction {
-    const fn last(self) -> Self {
+    const fn increment_depth(self) -> Self {
         match self {
-            Self::MateIn(moves) => Self::MatedIn(moves + 1),
-            Self::MatedIn(moves) => Self::MateIn(moves + 1),
+            Self::MateIn(moves) => Self::MateIn(moves + 1),
+            Self::MatedIn(moves) => Self::MatedIn(moves + 1),
             Self::Draw => Self::Draw,
-            Self::Checkmate => Self::MateIn(1),
+            Self::Checkmate => Self::MatedIn(1),
+        }
+    }
+}
+
+impl std::ops::Neg for PositionPrediction {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        match self {
+            Self::MateIn(0) => Self::Checkmate,
+            Self::MateIn(moves) => Self::MatedIn(moves),
+            Self::MatedIn(moves) => Self::MateIn(moves),
+            Self::Draw => Self::Draw,
+            Self::Checkmate => Self::MateIn(0),
         }
     }
 }
@@ -175,7 +194,7 @@ mod tests {
             prediction: Some(PositionPrediction::Checkmate),
         };
 
-        let eval = eval.last();
+        let eval = -eval;
         assert_eq!(
             eval,
             Evaluation {
@@ -185,7 +204,7 @@ mod tests {
             }
         );
 
-        let eval = eval.last();
+        let eval = -eval;
         assert_eq!(
             eval,
             Evaluation {
@@ -195,13 +214,20 @@ mod tests {
             }
         );
 
-        let eval = eval.last();
         assert_eq!(
-            eval,
+            -eval,
             Evaluation {
                 relative_to: Side::Black,
                 score: 2000,
                 prediction: Some(PositionPrediction::MateIn(3)),
+            }
+        );
+        assert_eq!(
+            eval,
+            Evaluation {
+                relative_to: Side::White,
+                score: -2000,
+                prediction: Some(PositionPrediction::MatedIn(2)),
             }
         );
 
@@ -211,9 +237,8 @@ mod tests {
             prediction: None,
         };
 
-        let eval = eval.last();
         assert_eq!(
-            eval,
+            -eval,
             Evaluation {
                 relative_to: Side::White,
                 score: -1234,
@@ -291,7 +316,7 @@ mod tests {
             prediction: Some(PositionPrediction::MateIn(5)),
         };
         let e2 = Evaluation {
-            relative_to: Side::White,
+            relative_to: Side::Black,
             score: 0,
             prediction: Some(PositionPrediction::MateIn(10)),
         };
@@ -304,7 +329,7 @@ mod tests {
             prediction: None,
         };
         let e2 = Evaluation {
-            relative_to: Side::White,
+            relative_to: Side::Black,
             score: 90_000,
             prediction: Some(PositionPrediction::MatedIn(100)),
         };
@@ -312,7 +337,7 @@ mod tests {
         assert!(e2 < e1);
 
         let e1 = Evaluation {
-            relative_to: Side::Black,
+            relative_to: Side::White,
             score: 0,
             prediction: Some(PositionPrediction::MatedIn(2)),
         };
@@ -323,5 +348,7 @@ mod tests {
         };
         assert!(e1 > e2);
         assert!(e2 < e1);
+        assert!(-e1 < -e2);
+        assert!(-e2 > -e1);
     }
 }

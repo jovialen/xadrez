@@ -129,7 +129,9 @@ impl MoveSearcher {
 
             for &m in &moves {
                 self.board.make_move(m).expect("All moves should be legal");
-                let score = -self.alpha_beta(depth, Evaluation::min(side), Evaluation::max(side));
+                let score = -self
+                    .alpha_beta(depth, Evaluation::min(!side), Evaluation::max(!side))
+                    .increment_depth();
                 self.board.undo();
 
                 if score > best_iteration_score {
@@ -223,7 +225,7 @@ impl MoveSearcher {
             self.data.nodes += 1;
 
             self.board.make_move(m).expect("All moves should be legal");
-            let score = -self.alpha_beta(depth - 1, -beta, -alpha);
+            let score = -self.alpha_beta(depth - 1, -beta, -alpha).increment_depth();
             self.board.undo();
 
             if score >= beta {
@@ -275,7 +277,7 @@ impl MoveSearcher {
             self.data.nodes += 1;
 
             self.board.make_move(m).expect("All moves should be legal");
-            let score = -self.quiesce(-beta, -alpha);
+            let score = -self.quiesce(-beta, -alpha).increment_depth();
             self.board.undo();
 
             if score >= beta {
