@@ -178,18 +178,26 @@ impl MoveSearcher {
         self.data
     }
 
+    #[inline]
+    fn exchange(&self, m: Move) -> i32 {
+        let piece = self.board.position[m.from].unwrap();
+
+        if let Some(capture) = self.board.position[m.to] {
+            evaluation::hce::piece_value(capture.kind, false)
+                - evaluation::hce::piece_value(piece.kind, false)
+        } else {
+            0
+        }
+    }
+
     fn score_move(&self, m: Move) -> i32 {
         let friendly = self.board.position.side_to_move as usize;
         let hostile = 1 ^ friendly;
 
-        let piece = self.board.position[m.from].unwrap();
-
         let mut score = 0;
 
-        if let Some(capture) = self.board.position[m.to] {
-            let exchange = evaluation::hce::piece_value(capture.kind, false)
-                - evaluation::hce::piece_value(piece.kind, false);
-            score += 10 * exchange;
+        if self.board.position[m.to].is_some() {
+            score += 10 * self.exchange(m);
         }
 
         if let MoveKind::Promotion(to) = m.kind {
@@ -279,7 +287,7 @@ impl MoveSearcher {
             .clone()
             .into_iter()
             .filter(|m| matches!(m.kind, MoveKind::Capture | MoveKind::Promotion(_)))
-            .sorted_by_key(|m| self.score_move(*m))
+            .sorted_by_key(|m| -self.exchange(*m))
             .collect();
 
         #[allow(clippy::cast_possible_wrap)]
