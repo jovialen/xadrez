@@ -10,7 +10,7 @@ use crate::piece::PieceKind;
 use crate::position::Position;
 use crate::r#move::{Move, MoveKind};
 use itertools::Itertools;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::time::{Duration, Instant};
 
 /// Configurable move searcher for a [`Chessboard`].
@@ -21,7 +21,7 @@ pub struct MoveSearcher {
     debug: bool,
 
     data: SearchData,
-    transposition: HashMap<Position, TranspositionEntry>,
+    transposition: FxHashMap<Position, TranspositionEntry>,
 }
 
 struct TranspositionEntry {
@@ -76,7 +76,7 @@ impl MoveSearcher {
             time: None,
             debug: false,
             data: SearchData::new(),
-            transposition: HashMap::new(),
+            transposition: FxHashMap::default(),
         }
     }
 

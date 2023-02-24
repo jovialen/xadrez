@@ -31,6 +31,7 @@ itertools = "0.10.5"
 binread = { version = "2", features = ["const_generics"], optional = true }
 nnue = { git = "https://github.com/analog-hors/nnue-rs", optional = true }
 lazy_static = { version = "1.4.0", optional = true }
+rustc-hash = "1.1.0"
 
 [dev-dependencies]
 criterion = "0.4.0"
