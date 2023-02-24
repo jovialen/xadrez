@@ -187,27 +187,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_evaluation_last() {
-        let eval = Evaluation {
+    fn test_score_last() {
+        let s = Score {
             relative_to: Side::White,
             score: -2000,
             prediction: Some(PositionPrediction::Checkmate),
         };
 
-        let eval = -eval;
+        let s = -s.increment_depth();
         assert_eq!(
-            eval,
-            Evaluation {
+            s,
+            Score {
                 relative_to: Side::Black,
                 score: 2000,
                 prediction: Some(PositionPrediction::MateIn(1)),
             }
         );
 
-        let eval = -eval;
+        let s = -s.increment_depth();
         assert_eq!(
-            eval,
-            Evaluation {
+            s,
+            Score {
                 relative_to: Side::White,
                 score: -2000,
                 prediction: Some(PositionPrediction::MatedIn(2)),
@@ -215,31 +215,31 @@ mod tests {
         );
 
         assert_eq!(
-            -eval,
-            Evaluation {
+            -s.increment_depth(),
+            Score {
                 relative_to: Side::Black,
                 score: 2000,
                 prediction: Some(PositionPrediction::MateIn(3)),
             }
         );
         assert_eq!(
-            eval,
-            Evaluation {
+            s,
+            Score {
                 relative_to: Side::White,
                 score: -2000,
                 prediction: Some(PositionPrediction::MatedIn(2)),
             }
         );
 
-        let eval = Evaluation {
+        let s = Score {
             relative_to: Side::Black,
             score: 1234,
             prediction: None,
         };
 
         assert_eq!(
-            -eval,
-            Evaluation {
+            -s.increment_depth(),
+            Score {
                 relative_to: Side::White,
                 score: -1234,
                 prediction: None,
@@ -248,107 +248,107 @@ mod tests {
     }
 
     #[test]
-    fn test_evaluation_numeric() {
-        let eval = Evaluation {
+    fn test_score_numeric() {
+        let s = Score {
             relative_to: Side::White,
             score: 1000,
             prediction: None,
         };
-        assert_eq!(eval.centi_pawns(), 1000);
-        assert_eq!(eval.centi_pawns(), 1000);
+        assert_eq!(s.centi_pawns(), 1000);
+        assert_eq!(s.centi_pawns(), 1000);
 
-        let eval = Evaluation {
+        let s = Score {
             relative_to: Side::Black,
             score: 1000,
             prediction: None,
         };
-        assert_eq!(eval.centi_pawns(), 1000);
-        assert_eq!(eval.absolute_centi_pawns(), -1000);
+        assert_eq!(s.centi_pawns(), 1000);
+        assert_eq!(s.absolute_centi_pawns(), -1000);
 
-        let eval = Evaluation {
+        let s = Score {
             relative_to: Side::Black,
             score: 1000,
             prediction: Some(PositionPrediction::Checkmate),
         };
-        assert_eq!(eval.centi_pawns(), -i32::MAX);
-        assert_eq!(eval.absolute_centi_pawns(), i32::MAX);
+        assert_eq!(s.centi_pawns(), -i32::MAX);
+        assert_eq!(s.absolute_centi_pawns(), i32::MAX);
 
-        let eval = Evaluation {
+        let s = Score {
             relative_to: Side::Black,
             score: 1000,
             prediction: Some(PositionPrediction::MateIn(10)),
         };
-        assert_eq!(eval.centi_pawns(), i32::MAX - 10);
-        assert_eq!(eval.absolute_centi_pawns(), -i32::MAX + 10);
+        assert_eq!(s.centi_pawns(), i32::MAX - 10);
+        assert_eq!(s.absolute_centi_pawns(), -i32::MAX + 10);
     }
 
     #[test]
-    fn test_evaluation_ordering() {
-        let e1 = Evaluation {
+    fn test_score_ordering() {
+        let s1 = Score {
             relative_to: Side::White,
             score: 1000,
             prediction: None,
         };
-        let e2 = Evaluation {
+        let s2 = Score {
             relative_to: Side::White,
             score: 500,
             prediction: None,
         };
-        assert!(e1 > e2);
-        assert!(e2 < e1);
+        assert!(s1 > s2);
+        assert!(s2 < s1);
 
-        let e1 = Evaluation {
+        let s1 = Score {
             relative_to: Side::White,
             score: 90_000,
             prediction: None,
         };
-        let e2 = Evaluation {
+        let s2 = Score {
             relative_to: Side::White,
             score: 0,
             prediction: Some(PositionPrediction::MateIn(10)),
         };
-        assert!(e2 > e1);
-        assert!(e1 < e2);
+        assert!(s2 > s1);
+        assert!(s1 < s2);
 
-        let e1 = Evaluation {
+        let s1 = Score {
             relative_to: Side::Black,
             score: 90_000,
             prediction: Some(PositionPrediction::MateIn(5)),
         };
-        let e2 = Evaluation {
+        let s2 = Score {
             relative_to: Side::Black,
             score: 0,
             prediction: Some(PositionPrediction::MateIn(10)),
         };
-        assert!(e1 > e2);
-        assert!(e2 < e1);
+        assert!(s1 > s2);
+        assert!(s2 < s1);
 
-        let e1 = Evaluation {
+        let s1 = Score {
             relative_to: Side::Black,
             score: -12898,
             prediction: None,
         };
-        let e2 = Evaluation {
+        let s2 = Score {
             relative_to: Side::Black,
             score: 90_000,
             prediction: Some(PositionPrediction::MatedIn(100)),
         };
-        assert!(e1 > e2);
-        assert!(e2 < e1);
+        assert!(s1 > s2);
+        assert!(s2 < s1);
 
-        let e1 = Evaluation {
+        let s1 = Score {
             relative_to: Side::White,
             score: 0,
             prediction: Some(PositionPrediction::MatedIn(2)),
         };
-        let e2 = Evaluation {
+        let s2 = Score {
             relative_to: Side::White,
             score: 0,
             prediction: Some(PositionPrediction::MatedIn(1)),
         };
-        assert!(e1 > e2);
-        assert!(e2 < e1);
-        assert!(-e1 < -e2);
-        assert!(-e2 > -e1);
+        assert!(s1 > s2);
+        assert!(s2 < s1);
+        assert!(-s1 < -s2);
+        assert!(-s2 > -s1);
     }
 }
