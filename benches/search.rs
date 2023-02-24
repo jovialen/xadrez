@@ -21,7 +21,7 @@ fn search_move_benchmark(c: &mut Criterion) {
     high_depth.finish();
 
     let mut checkmate = c.benchmark_group("move-search-find-checkmate");
-    checkmate.sample_size(10);
+    checkmate.sample_size(30);
     let board = Chessboard::from_fen("3r4/4r3/k7/8/8/6K1/8/8 b - - 0 1").expect("Valid FEN");
     checkmate.bench_function("search Kvrrk", |b| b.iter(|| search(&board)));
     checkmate.finish();
