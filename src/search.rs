@@ -5,7 +5,7 @@
 
 use crate::board::Chessboard;
 use crate::evaluation;
-use crate::evaluation::score::Evaluation;
+use crate::evaluation::score::Score;
 use crate::piece::PieceKind;
 use crate::position::Position;
 use crate::r#move::{Move, MoveKind};
@@ -27,7 +27,7 @@ pub struct MoveSearcher {
 #[derive(Default)]
 struct TranspositionEntry {
     at_depth: usize,
-    score: Evaluation,
+    score: Score,
     best_move: Option<Move>,
 }
 
@@ -43,7 +43,7 @@ pub struct SearchData {
     ///
     /// The score is the expected relative evaluation [`SearchData::depth`]
     /// moves in the future.
-    pub score: Evaluation,
+    pub score: Score,
     /// How many moves into the future the search looked.
     pub depth: usize,
     /// When the search started.
@@ -125,12 +125,12 @@ impl MoveSearcher {
         }
 
         'search: for depth in 0..max_depth {
-            let (mut best_iteration_move, mut best_iteration_score) = (None, Evaluation::min(side));
+            let (mut best_iteration_move, mut best_iteration_score) = (None, Score::min(side));
 
             for &m in &moves {
                 self.board.make_move(m).expect("All moves should be legal");
                 let score = -self
-                    .alpha_beta(depth, Evaluation::min(!side), Evaluation::max(!side))
+                    .alpha_beta(depth, Score::min(!side), Score::max(!side))
                     .increment_depth();
                 self.board.undo();
 
@@ -204,7 +204,7 @@ impl MoveSearcher {
         -score
     }
 
-    fn alpha_beta(&mut self, depth: usize, mut alpha: Evaluation, beta: Evaluation) -> Evaluation {
+    fn alpha_beta(&mut self, depth: usize, mut alpha: Score, beta: Score) -> Score {
         if let Some(entry) = self.transposition.get(&self.board.position) {
             if entry.at_depth >= depth {
                 self.data.transposition_hits += 1;
@@ -251,7 +251,7 @@ impl MoveSearcher {
         alpha
     }
 
-    fn quiesce(&mut self, mut alpha: Evaluation, beta: Evaluation) -> Evaluation {
+    fn quiesce(&mut self, mut alpha: Score, beta: Score) -> Score {
         let evaluation = self.board.evaluate();
         if evaluation >= beta {
             self.data.prunes += 1;
@@ -292,7 +292,7 @@ impl MoveSearcher {
 }
 
 impl TranspositionEntry {
-    fn new(at_depth: usize, score: Evaluation, best_move: Option<Move>) -> Self {
+    fn new(at_depth: usize, score: Score, best_move: Option<Move>) -> Self {
         Self {
             at_depth,
             score,
@@ -305,7 +305,7 @@ impl SearchData {
     fn new() -> Self {
         Self {
             best_move: None,
-            score: Evaluation::default(),
+            score: Score::default(),
             depth: 0,
             start_time: Instant::now(),
             duration: Duration::default(),

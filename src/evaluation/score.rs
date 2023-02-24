@@ -4,11 +4,11 @@ use crate::piece::Side;
 
 /// Evaluation for a chess position.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Evaluation {
+pub struct Score {
     /// Which side the evaluation is relative to.
     pub relative_to: Side,
     /// The score for the current position, relative to
-    /// [`Evaluation::relative_to`], in approximate centi-pawns.
+    /// [`Score::relative_to`], in approximate centi-pawns.
     pub score: i32,
     /// How the position will develop.
     pub prediction: Option<PositionPrediction>,
@@ -27,10 +27,10 @@ pub enum PositionPrediction {
     Checkmate,
 }
 
-impl Evaluation {
+impl Score {
     /// Get a numeric representation of the evaluation in centi-pawns.
     ///
-    /// The result will be relative to [`Evaluation::relative_to`].
+    /// The result will be relative to [`Score::relative_to`].
     #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
     #[must_use]
     pub const fn centi_pawns(&self) -> i32 {
@@ -55,7 +55,7 @@ impl Evaluation {
 
     /// Get a numeric representation of the evalution in pawns.
     ///
-    /// The result will be relative to [`Evaluation::relative_to`].
+    /// The result will be relative to [`Score::relative_to`].
     #[must_use]
     pub fn pawns(&self) -> f64 {
         f64::from(self.centi_pawns()) / 100.0
@@ -109,21 +109,21 @@ impl Evaluation {
     }
 }
 
-impl Ord for Evaluation {
+impl Ord for Score {
     fn cmp(&self, rhs: &Self) -> std::cmp::Ordering {
         assert_eq!(self.relative_to, rhs.relative_to);
         self.centi_pawns().cmp(&rhs.centi_pawns())
     }
 }
 
-impl PartialOrd for Evaluation {
+impl PartialOrd for Score {
     fn partial_cmp(&self, rhs: &Self) -> std::option::Option<std::cmp::Ordering> {
         assert_eq!(self.relative_to, rhs.relative_to);
         self.centi_pawns().partial_cmp(&rhs.centi_pawns())
     }
 }
 
-impl std::ops::Neg for Evaluation {
+impl std::ops::Neg for Score {
     type Output = Self;
 
     fn neg(self) -> Self::Output {
@@ -135,7 +135,7 @@ impl std::ops::Neg for Evaluation {
     }
 }
 
-impl Default for Evaluation {
+impl Default for Score {
     fn default() -> Self {
         Self {
             relative_to: Side::White,
@@ -145,7 +145,7 @@ impl Default for Evaluation {
     }
 }
 
-impl std::fmt::Display for Evaluation {
+impl std::fmt::Display for Score {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         match self.prediction {
             Some(PositionPrediction::Checkmate) => write!(f, "checkmate"),

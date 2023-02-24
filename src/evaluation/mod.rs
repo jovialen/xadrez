@@ -7,14 +7,14 @@ pub mod score;
 
 use crate::board::GameState;
 use crate::position::{Position, PositionBitboards};
-use score::{Evaluation, PositionPrediction};
+use score::{PositionPrediction, Score};
 
 #[cfg_attr(feature = "nnue", allow(unused_variables))]
 pub(crate) fn evaluate_position(
     state: GameState,
     position: &Position,
     bitboards: &PositionBitboards,
-) -> Evaluation {
+) -> Score {
     #[cfg(feature = "nnue")]
     let score = nnue::nnue_evaluation(position);
 
@@ -27,7 +27,7 @@ pub(crate) fn evaluate_position(
         GameState::Checkmate => Some(PositionPrediction::Checkmate),
     };
 
-    Evaluation {
+    Score {
         relative_to: position.side_to_move,
         score,
         prediction,

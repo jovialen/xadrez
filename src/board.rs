@@ -3,7 +3,7 @@
 //! Provides the structures relating to the chessboard as a whole.
 
 use crate::error::{MoveError, ParseFenError};
-use crate::evaluation::score::Evaluation;
+use crate::evaluation::score::Score;
 use crate::fen::FEN_STARTING_POSITION;
 use crate::piece::{Piece, PieceKind, Side, SIDE_COUNT};
 use crate::position::{Position, PositionBitboards, EMPTY_POSITION};
@@ -277,7 +277,7 @@ impl Chessboard {
     /// Evaluate the current position relative to the side to move.
     #[must_use]
     #[inline]
-    pub fn evaluate(&self) -> Evaluation {
+    pub fn evaluate(&self) -> Score {
         evaluation::evaluate_position(self.state(), &self.position, &self.bitboards)
     }
 
