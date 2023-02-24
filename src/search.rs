@@ -28,6 +28,7 @@ pub struct MoveSearcher {
 struct TranspositionEntry {
     at_depth: usize,
     score: Evaluation,
+    best_move: Option<Move>,
 }
 
 /// Output data from a move search with the [`MoveSearcher::search`].
@@ -123,13 +124,12 @@ impl MoveSearcher {
             return self.data;
         }
 
-        'search: for depth in 1..max_depth {
+        'search: for depth in 0..max_depth {
             let (mut best_iteration_move, mut best_iteration_score) = (None, Evaluation::min(side));
 
             for &m in &moves {
                 self.board.make_move(m).expect("All moves should be legal");
-                let score =
-                    -self.alpha_beta(depth - 1, Evaluation::min(side), Evaluation::max(side));
+                let score = -self.alpha_beta(depth, Evaluation::min(side), Evaluation::max(side));
                 self.board.undo();
 
                 if score > best_iteration_score {
@@ -192,6 +192,13 @@ impl MoveSearcher {
             score -= 350;
         }
 
+        if let Some(entry) = self.transposition.get(&self.board.position) {
+            if entry.best_move == Some(m) && self.board.is_legal(m) {
+                // Always search hash moves first
+                score += 10_000;
+            }
+        }
+
         -score
     }
 
@@ -211,6 +218,7 @@ impl MoveSearcher {
 
         moves.sort_by_key(|m| self.score_move(*m));
 
+        let mut best_move = None;
         for m in moves {
             self.data.nodes += 1;
 
@@ -220,15 +228,24 @@ impl MoveSearcher {
 
             if score >= beta {
                 self.data.prunes += 1;
-                self.transposition
-                    .insert(self.board.position, TranspositionEntry::new(depth, beta));
+                self.transposition.insert(
+                    self.board.position,
+                    TranspositionEntry::new(depth, beta, Some(m)),
+                );
                 return beta;
+            }
+
+            if score > alpha {
+                alpha = score;
+                best_move = Some(m);
             }
             alpha = alpha.max(score);
         }
 
-        self.transposition
-            .insert(self.board.position, TranspositionEntry::new(depth, alpha));
+        self.transposition.insert(
+            self.board.position,
+            TranspositionEntry::new(depth, alpha, best_move),
+        );
         alpha
     }
 
@@ -273,8 +290,12 @@ impl MoveSearcher {
 }
 
 impl TranspositionEntry {
-    fn new(at_depth: usize, score: Evaluation) -> Self {
-        Self { at_depth, score }
+    fn new(at_depth: usize, score: Evaluation, best_move: Option<Move>) -> Self {
+        Self {
+            at_depth,
+            score,
+            best_move,
+        }
     }
 }
 
