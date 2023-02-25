@@ -135,7 +135,7 @@ impl MoveSearcher {
 
             for &m in &moves {
                 self.board.make_move(m).expect("All moves should be legal");
-                let score = -self.pv_search(Score::min(!side), Score::max(!side), depth, 0);
+                let score = -self.pv_search(Score::min(!side), Score::max(!side), depth, 1);
                 self.board.undo();
 
                 if score > best_iteration_score {
