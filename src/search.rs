@@ -20,6 +20,10 @@ pub struct MoveSearcher {
     time: Option<Duration>,
     debug: bool,
 
+    mc_reduction: usize,
+    mc_moves: usize,
+    mc_limit: usize,
+
     data: SearchData,
     transposition: FxHashMap<Position, TranspositionEntry>,
 }
@@ -31,6 +35,7 @@ struct TranspositionEntry {
     best_move: Option<Move>,
 }
 
+#[derive(PartialEq, Eq, Clone, Copy)]
 enum NodeType {
     Pv,
     Cut,
@@ -75,6 +80,11 @@ impl MoveSearcher {
             depth: None,
             time: None,
             debug: false,
+
+            mc_reduction: 1,
+            mc_moves: 6,
+            mc_limit: 3,
+
             data: SearchData::new(),
             transposition: FxHashMap::default(),
         }
@@ -116,6 +126,29 @@ impl MoveSearcher {
     #[must_use]
     pub fn debug(mut self, debug: bool) -> Self {
         self.debug = debug;
+        self
+    }
+
+    /// Configure the multi-cut pruning.
+    ///
+    /// Prune some cut nodes by returning early by searching the first `moves`
+    /// children of the node to a reduced depth (`reduction`). If more than
+    /// `limit` children trigger a beta cutoff, prune the entire tree.
+    ///
+    /// Initially the searcher will search `6` nodes to a reduced depth of `1`,
+    /// and prune the tree if more than `3` children trigger a cutoff.
+    ///
+    /// # Arguments
+    ///
+    /// * `moves` - Number of moves to look at when checking for multi-cut
+    ///   prune.
+    /// * `limit` - Number of cutoffs to trigger a multi-cut prune.
+    /// * `reduction` - Depth reduction for search in multi-cut prune.
+    #[must_use]
+    pub fn multi_cut(mut self, moves: usize, limit: usize, reduction: usize) -> Self {
+        self.mc_moves = moves;
+        self.mc_limit = limit;
+        self.mc_reduction = reduction;
         self
     }
 
@@ -254,6 +287,9 @@ impl MoveSearcher {
             return self.quiesce(alpha, beta, distance_from_root);
         }
 
+        let next_depth = depth - 1;
+        let next_distance = distance_from_root - 1;
+
         let mut moves = self.board.moves().clone();
         moves.sort_by_key(|m| self.score_move(*m));
 
@@ -262,11 +298,13 @@ impl MoveSearcher {
             self.board.make_move(m).expect("Legal move");
 
             let score = if best_move.is_none() {
-                -self.pv_search(-beta, -alpha, depth - 1, distance_from_root + 1)
+                // All left-most nodes are Pv nodes.
+                -self.pv_search(-beta, -alpha, next_depth, next_distance)
             } else {
-                let mut score = -self.zw_search(-alpha, depth - 1, distance_from_root + 1);
+                // All sibling-nodes to Pv nodes are cut nodes.
+                let mut score = -self.zw_search(NodeType::Cut, -alpha, next_depth, next_distance);
                 if score > alpha && score < beta {
-                    score = -self.pv_search(-beta, -alpha, depth - 1, distance_from_root + 1);
+                    score = -self.pv_search(-beta, -alpha, next_depth, next_distance);
                 }
                 score
             };
@@ -274,6 +312,7 @@ impl MoveSearcher {
             self.board.undo();
 
             if score >= beta {
+                // We're cutting the node, so save it as a cut node in the transposition table.
                 self.transposition.insert(
                     self.board.position,
                     TranspositionEntry::new(depth, beta, NodeType::Cut, Some(m)),
@@ -289,6 +328,7 @@ impl MoveSearcher {
             }
         }
 
+        // No cut occured, so this is a Pv node.
         self.transposition.insert(
             self.board.position,
             TranspositionEntry::new(depth, alpha, NodeType::Pv, best_move),
@@ -296,7 +336,13 @@ impl MoveSearcher {
         alpha
     }
 
-    fn zw_search(&mut self, beta: Score, depth: usize, distance_from_root: usize) -> Score {
+    fn zw_search(
+        &mut self,
+        node_type: NodeType,
+        beta: Score,
+        depth: usize,
+        distance_from_root: usize,
+    ) -> Score {
         self.data.nodes += 1;
 
         let alpha = beta - 1;
@@ -310,15 +356,51 @@ impl MoveSearcher {
             return self.quiesce(alpha, beta, distance_from_root);
         }
 
+        // All children of cut nodes are all nodes, and vice-versa.
+        #[allow(clippy::match_wildcard_for_single_variants)]
+        let next_node_type = match node_type {
+            NodeType::Cut => NodeType::All,
+            NodeType::All => NodeType::Cut,
+            _ => unreachable!("zw_search should only be used for cut and all nodes"),
+        };
+        let next_distance = distance_from_root + 1;
+        let next_beta = -beta + 1;
+        let next_depth = depth - 1;
+
         let mut moves = self.board.moves().clone();
         moves.sort_by_key(|m| self.score_move(*m));
 
+        // Multi-cut pruning.
+        if node_type == NodeType::Cut
+            && next_depth >= self.mc_reduction
+            && moves.len() > self.mc_moves
+        {
+            let mc_depth = next_depth - self.mc_reduction;
+
+            let mut count = 0;
+            for m in moves.iter().take(self.mc_moves) {
+                self.board.make_move(*m).expect("Legal move");
+                let score = -self.zw_search(next_node_type, next_beta, mc_depth, next_distance);
+                self.board.undo();
+
+                if score >= beta {
+                    count += 1;
+                    if count >= self.mc_limit {
+                        self.data.prunes += 1;
+                        return beta;
+                    }
+                }
+            }
+        }
+
+        // Search children.
         for m in moves {
             self.board.make_move(m).expect("Legal move");
-            let score = -self.zw_search(-beta + 1, depth - 1, distance_from_root + 1);
+            let score = -self.zw_search(next_node_type, next_beta, next_depth, next_distance);
             self.board.undo();
 
             if score >= beta {
+                // We're cutting the node, so save it as a cut node in the transposition table.
                 self.transposition.insert(
                     self.board.position,
                     TranspositionEntry::new(depth, beta, NodeType::Cut, Some(m)),
@@ -329,6 +411,7 @@ impl MoveSearcher {
             }
         }
 
+        // No cut occured, so save this as an all node.
         self.transposition.insert(
             self.board.position,
             TranspositionEntry::new(depth, alpha, NodeType::All, None),
