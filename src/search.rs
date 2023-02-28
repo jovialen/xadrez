@@ -338,13 +338,9 @@ impl MoveSearcher {
         self.data.nodes += 1;
 
         let side = self.board.side_to_move();
+        let tthit = self.transposition.get(&self.board.position).is_some();
 
-        if let Some(score) = self.fetch_transposition(alpha, beta, depth) {
-            self.data.transposition_hits += 1;
-            return score;
-        }
-
-        if depth <= 3 {
+        if depth == 0 || (depth <= 3 && !tthit) {
             return self.quiesce(alpha, beta, distance_from_root);
         }
 
@@ -356,10 +352,14 @@ impl MoveSearcher {
             return alpha;
         }
 
-        // All pv nodes not in the transposition table are reduced.
-        self.data.reductions += 1;
-        let next_depth = depth - 3;
         let next_distance = distance_from_root + 1;
+        let mut next_depth = depth - 1;
+
+        // All pv nodes not in the transposition table are reduced.
+        if !tthit {
+            self.data.reductions += 1;
+            next_depth = next_depth.saturating_sub(2);
+        }
 
         let mut moves = self.board.moves().clone();
         moves.sort_by_key(|m| self.score_move(*m));
