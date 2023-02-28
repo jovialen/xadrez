@@ -329,11 +329,13 @@ impl MoveSearcher {
     fn pv_search(
         &mut self,
         mut alpha: Score,
-        beta: Score,
+        mut beta: Score,
         depth: usize,
         distance_from_root: usize,
     ) -> Score {
         self.data.nodes += 1;
+
+        let side = self.board.side_to_move();
 
         if let Some(score) = self.fetch_transposition(alpha, beta, depth) {
             self.data.transposition_hits += 1;
@@ -342,6 +344,13 @@ impl MoveSearcher {
 
         if depth == 0 {
             return self.quiesce(alpha, beta, distance_from_root);
+        }
+
+        // Mate distance pruning
+        alpha = alpha.max(Score::mated_in(side, distance_from_root));
+        beta = beta.min(Score::mate_in(side, distance_from_root + 1));
+        if alpha >= beta {
+            return alpha;
         }
 
         let next_depth = depth - 1;
@@ -390,13 +399,14 @@ impl MoveSearcher {
     fn zw_search(
         &mut self,
         node_type: NodeType,
-        beta: Score,
+        mut beta: Score,
         depth: usize,
         distance_from_root: usize,
     ) -> Score {
         self.data.nodes += 1;
 
-        let alpha = beta - 1;
+        let side = self.board.side_to_move();
+        let mut alpha = beta - 1;
 
         if let Some(score) = self.fetch_transposition(alpha, beta, depth) {
             self.data.transposition_hits += 1;
@@ -405,6 +415,13 @@ impl MoveSearcher {
 
         if depth == 0 {
             return self.quiesce(alpha, beta, distance_from_root);
+        }
+
+        // Mate distance pruning
+        alpha = alpha.max(Score::mated_in(side, distance_from_root));
+        beta = beta.min(Score::mate_in(side, distance_from_root + 1));
+        if alpha >= beta {
+            return alpha;
         }
 
         // Razoring

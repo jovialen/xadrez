@@ -102,6 +102,15 @@ impl Score {
     }
 
     #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    pub(crate) const fn mate_in(relative_to: Side, moves: usize) -> Self {
+        Self {
+            relative_to,
+            score: i32::MAX - moves as i32,
+            prediction: Some(PositionPrediction::MateIn(moves)),
+        }
+    }
+
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
     pub(crate) const fn mated_in(relative_to: Side, moves: usize) -> Self {
         Self {
             relative_to,
