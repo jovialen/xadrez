@@ -242,6 +242,17 @@ impl Chessboard {
         Ok(())
     }
 
+    pub(crate) fn make_null_move(&mut self) {
+        self.save_current_to_history();
+
+        // Update side to move
+        self.position.side_to_move = !self.position.side_to_move;
+
+        // Update legal moves
+        self.bitboards = self.position.bitboards();
+        self.legal_moves = movegen::generate_legal_moves(&self.position, &self.bitboards);
+    }
+
     /// Undo the last move.
     pub fn undo(&mut self) {
         if let Some((last_pos, last_moves)) = self.history.pop() {

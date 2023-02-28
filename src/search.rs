@@ -72,6 +72,8 @@ pub struct SearchData {
     pub transposition_hits: usize,
     /// How many branches where pruned from the search.
     pub prunes: usize,
+    /// How many times the search depth was reduced.
+    pub reductions: usize,
 }
 
 impl MoveSearcher {
@@ -426,17 +428,18 @@ impl MoveSearcher {
             return alpha;
         }
 
+        let current_eval = self.board.evaluate();
+
         // Razoring
-        if depth <= self.razoring_depth && !self.board.in_check() {
-            let current_eval = self.board.evaluate();
+        if depth <= self.razoring_depth
+            && !self.board.in_check()
+            && current_eval + self.razoring_margin < beta
+        {
+            let quiesce_eval = self.quiesce(alpha, beta, distance_from_root);
 
-            if current_eval + self.razoring_margin < beta {
-                let quiesce_eval = self.quiesce(alpha, beta, distance_from_root);
-
-                if quiesce_eval < beta {
-                    self.data.prunes += 1;
-                    return quiesce_eval;
-                }
+            if quiesce_eval < beta {
+                self.data.prunes += 1;
+                return quiesce_eval;
             }
         }
 
@@ -449,18 +452,34 @@ impl MoveSearcher {
         };
         let next_distance = distance_from_root + 1;
         let next_beta = -beta + 1;
-        let next_depth = depth - 1;
+        let mut next_depth = depth - 1;
+
+        // Null-move reduction
+        if current_eval >= beta && !self.board.in_check() {
+            let reduction = if depth > 6 { 4 } else { 3 };
+            let null_depth = depth.saturating_sub(reduction);
+
+            self.board.make_null_move();
+            let null_eval = -self.zw_search(next_node_type, next_beta, null_depth, next_distance);
+            self.board.undo();
+
+            if null_eval >= beta {
+                self.data.reductions += 1;
+                next_depth = next_depth.saturating_sub(6);
+
+                if next_depth == 0 {
+                    self.data.prunes += 1;
+                    return self.evaluate(distance_from_root);
+                }
+            }
+        }
 
         let mut moves = self.board.moves().clone();
         moves.sort_by_key(|m| self.score_move(*m));
 
         // Multi-cut pruning.
-        if node_type == NodeType::Cut
-            && next_depth >= self.mc_reduction
-            && moves.len() > self.mc_moves
-            && !self.board.in_check()
-        {
-            let mc_depth = next_depth - self.mc_reduction;
+        if node_type == NodeType::Cut && moves.len() > self.mc_moves && !self.board.in_check() {
+            let mc_depth = next_depth.saturating_sub(self.mc_reduction);
 
             let mut count = 0;
             for m in moves.iter().take(self.mc_moves) {
@@ -559,6 +578,7 @@ impl SearchData {
             nodes: 0,
             transposition_hits: 0,
             prunes: 0,
+            reductions: 0,
         }
     }
 }

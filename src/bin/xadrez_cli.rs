@@ -94,11 +94,12 @@ fn search<'a, I: Iterator<Item = &'a str>>(board: &Chessboard, mut args: I) {
 
     if let Some(best) = search_data.best_move {
         println!(
-            "Best move: {best} (Score: {}, Nodes: {}, Transposition Hits: {}, Prunes: {})",
+            "Best move: {best} (Score: {}, Nodes: {}, Transposition Hits: {}, Prunes: {}, Reductions: {})",
             search_data.score,
             search_data.nodes,
             search_data.transposition_hits,
-            search_data.prunes
+            search_data.prunes,
+            search_data.reductions,
         );
     } else {
         println!("Failed to find a move. Try giving more time to search.");
