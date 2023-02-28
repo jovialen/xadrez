@@ -20,6 +20,9 @@ pub struct MoveSearcher {
     time: Option<Duration>,
     debug: bool,
 
+    razoring_depth: usize,
+    razoring_margin: i32,
+
     mc_reduction: usize,
     mc_moves: usize,
     mc_limit: usize,
@@ -81,6 +84,9 @@ impl MoveSearcher {
             time: None,
             debug: false,
 
+            razoring_depth: 3,
+            razoring_margin: 300,
+
             mc_reduction: 1,
             mc_moves: 6,
             mc_limit: 3,
@@ -129,6 +135,27 @@ impl MoveSearcher {
         self
     }
 
+    /// Configure the razoring.
+    ///
+    /// Razoring works by checking if low-depth nodes are bad enough to consider
+    /// pruning, without being in check. If razoring is triggered, a quiesce
+    /// search will check if the position can be turned around.
+    ///
+    /// Initially the searcher will start checking for razoring at depth `3`
+    /// with a `300` centi-pawn margin.
+    ///
+    /// # Arguments
+    ///
+    /// * `depth` - At which depth razoring gets enabled. Set to `0` to disable.
+    /// * `margin` - How far below `beta` the current position has to be to
+    ///   trigger razoring in centi-pawns.
+    #[must_use]
+    pub fn razoring(mut self, depth: usize, margin: i32) -> Self {
+        self.razoring_depth = depth;
+        self.razoring_margin = margin;
+        self
+    }
+
     /// Configure the multi-cut pruning.
     ///
     /// Prune some cut nodes by returning early by searching the first `moves`
@@ -141,7 +168,7 @@ impl MoveSearcher {
     /// # Arguments
     ///
     /// * `moves` - Number of moves to look at when checking for multi-cut
-    ///   prune.
+    ///   prune. Set to `0` to disable multi-cutting.
     /// * `limit` - Number of cutoffs to trigger a multi-cut prune.
     /// * `reduction` - Depth reduction for search in multi-cut prune.
     #[must_use]
@@ -380,6 +407,20 @@ impl MoveSearcher {
             return self.quiesce(alpha, beta, distance_from_root);
         }
 
+        // Razoring
+        if depth <= self.razoring_depth && !self.board.in_check() {
+            let current_eval = self.board.evaluate();
+
+            if current_eval + self.razoring_margin < beta {
+                let quiesce_eval = self.quiesce(alpha, beta, distance_from_root);
+
+                if quiesce_eval < beta {
+                    self.data.prunes += 1;
+                    return quiesce_eval;
+                }
+            }
+        }
+
         // All children of cut nodes are all nodes, and vice-versa.
         #[allow(clippy::match_wildcard_for_single_variants)]
         let next_node_type = match node_type {
@@ -398,6 +439,7 @@ impl MoveSearcher {
         if node_type == NodeType::Cut
             && next_depth >= self.mc_reduction
             && moves.len() > self.mc_moves
+            && !self.board.in_check()
         {
             let mc_depth = next_depth - self.mc_reduction;
 
