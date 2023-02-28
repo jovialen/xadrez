@@ -344,7 +344,7 @@ impl MoveSearcher {
             return score;
         }
 
-        if depth == 0 {
+        if depth <= 3 {
             return self.quiesce(alpha, beta, distance_from_root);
         }
 
@@ -356,7 +356,7 @@ impl MoveSearcher {
             return alpha;
         }
 
-        let next_depth = depth - 1;
+        let next_depth = depth - 3;
         let next_distance = distance_from_root + 1;
 
         let mut moves = self.board.moves().clone();
@@ -463,7 +463,7 @@ impl MoveSearcher {
             let null_eval = -self.zw_search(next_node_type, next_beta, null_depth, next_distance);
             self.board.undo();
 
-            if null_eval >= beta {
+            if null_eval >= beta && !null_eval.is_mate() {
                 self.data.reductions += 1;
                 next_depth = next_depth.saturating_sub(6);
 
@@ -472,6 +472,11 @@ impl MoveSearcher {
                     return self.evaluate(distance_from_root);
                 }
             }
+        }
+
+        // Cut node reduction
+        if next_depth >= 2 && node_type == NodeType::Cut {
+            next_depth -= 2;
         }
 
         let mut moves = self.board.moves().clone();
