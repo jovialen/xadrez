@@ -356,6 +356,8 @@ impl MoveSearcher {
             return alpha;
         }
 
+        // All pv nodes not in the transposition table are reduced.
+        self.data.reductions += 1;
         let next_depth = depth - 3;
         let next_distance = distance_from_root + 1;
 
@@ -475,8 +477,9 @@ impl MoveSearcher {
         }
 
         // Cut node reduction
-        if next_depth >= 2 && node_type == NodeType::Cut {
-            next_depth -= 2;
+        if next_depth >= 1 && node_type == NodeType::Cut {
+            self.data.reductions += 1;
+            next_depth -= 1;
         }
 
         let mut moves = self.board.moves().clone();
