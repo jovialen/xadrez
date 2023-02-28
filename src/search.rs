@@ -274,6 +274,31 @@ impl MoveSearcher {
         }
     }
 
+    fn save_transposition(
+        &mut self,
+        at_depth: usize,
+        score: Score,
+        node_type: NodeType,
+        best_move: Option<Move>,
+    ) {
+        if let Some(entry) = self.transposition.get(&self.board.position) {
+            // Prefer higher depth transpositions
+            if entry.at_depth > at_depth {
+                return;
+            }
+
+            // Prefer entries with a best move
+            if entry.at_depth == at_depth && entry.best_move.is_some() && best_move.is_none() {
+                return;
+            }
+        }
+
+        self.transposition.insert(
+            self.board.position,
+            TranspositionEntry::new(at_depth, score, node_type, best_move),
+        );
+    }
+
     fn pv_search(
         &mut self,
         mut alpha: Score,
@@ -318,10 +343,7 @@ impl MoveSearcher {
 
             if score >= beta {
                 // We're cutting the node, so save it as a cut node in the transposition table.
-                self.transposition.insert(
-                    self.board.position,
-                    TranspositionEntry::new(depth, beta, NodeType::Cut, Some(m)),
-                );
+                self.save_transposition(depth, beta, NodeType::Cut, Some(m));
 
                 self.data.prunes += 1;
                 return beta;
@@ -334,10 +356,7 @@ impl MoveSearcher {
         }
 
         // No cut occured, so this is a Pv node.
-        self.transposition.insert(
-            self.board.position,
-            TranspositionEntry::new(depth, alpha, NodeType::Pv, best_move),
-        );
+        self.save_transposition(depth, alpha, NodeType::Pv, best_move);
         alpha
     }
 
@@ -406,10 +425,7 @@ impl MoveSearcher {
 
             if score >= beta {
                 // We're cutting the node, so save it as a cut node in the transposition table.
-                self.transposition.insert(
-                    self.board.position,
-                    TranspositionEntry::new(depth, beta, NodeType::Cut, Some(m)),
-                );
+                self.save_transposition(depth, beta, NodeType::Cut, Some(m));
 
                 self.data.prunes += 1;
                 return beta;
@@ -417,10 +433,7 @@ impl MoveSearcher {
         }
 
         // No cut occured, so save this as an all node.
-        self.transposition.insert(
-            self.board.position,
-            TranspositionEntry::new(depth, alpha, NodeType::All, None),
-        );
+        self.save_transposition(depth, beta, NodeType::All, None);
         alpha
     }
 
