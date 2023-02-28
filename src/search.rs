@@ -350,7 +350,7 @@ impl MoveSearcher {
         alpha = alpha.max(Score::mated_in(side, distance_from_root));
         beta = beta.min(Score::mate_in(side, distance_from_root + 1));
         if alpha >= beta {
-            self.prunes += 1;
+            self.data.prunes += 1;
             return alpha;
         }
 
@@ -422,7 +422,7 @@ impl MoveSearcher {
         alpha = alpha.max(Score::mated_in(side, distance_from_root));
         beta = beta.min(Score::mate_in(side, distance_from_root + 1));
         if alpha >= beta {
-            self.prunes += 1;
+            self.data.prunes += 1;
             return alpha;
         }
 
