@@ -283,12 +283,17 @@ impl MoveSearcher {
     ) -> Score {
         self.data.nodes += 1;
 
+        if let Some(score) = self.fetch_transposition(alpha, beta, depth) {
+            self.data.transposition_hits += 1;
+            return score;
+        }
+
         if depth == 0 {
             return self.quiesce(alpha, beta, distance_from_root);
         }
 
         let next_depth = depth - 1;
-        let next_distance = distance_from_root - 1;
+        let next_distance = distance_from_root + 1;
 
         let mut moves = self.board.moves().clone();
         moves.sort_by_key(|m| self.score_move(*m));
