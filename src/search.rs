@@ -340,7 +340,7 @@ impl MoveSearcher {
         self.data.nodes += 1;
 
         let side = self.board.side_to_move();
-        let tthit = self.transposition.get(&self.board.position).is_some();
+        let tthit = self.transposition.contains_key(&self.board.position);
 
         if depth == 0 || (depth <= 3 && !tthit) {
             return self.quiesce(alpha, beta, distance_from_root);
@@ -355,16 +355,27 @@ impl MoveSearcher {
         }
 
         let next_distance = distance_from_root + 1;
-        let mut next_depth = depth - 1;
+
+        let mut reductions = 0;
+        let mut extensions = 0;
 
         // All pv nodes not in the transposition table are reduced.
         if !tthit {
-            self.data.reductions += 1;
-            next_depth = next_depth.saturating_sub(2);
+            reductions += 3;
+        }
+
+        // Check extension
+        if self.board.in_check() {
+            extensions += 1;
         }
 
         let mut moves = self.board.moves().clone();
         moves.sort_by_key(|m| self.score_move(*m));
+
+        self.data.reductions += reductions;
+        let next_depth = (depth + extensions)
+            .saturating_sub(reductions + 1)
+            .min(max_depth - distance_from_root);
 
         let mut best_move = None;
         for m in moves {
@@ -459,27 +470,28 @@ impl MoveSearcher {
         };
         let next_distance = distance_from_root + 1;
         let next_beta = -beta + 1;
-        let mut next_depth = depth - 1;
+
+        let mut extensions = 0;
+        let mut reductions = 0;
 
         // Null-move reduction
         if current_eval >= beta && !self.board.in_check() {
-            let reduction = 3 + usize::from(depth > 6);
+            let next_depth = depth.saturating_sub(3 + usize::from(depth > 6));
 
             self.board.make_null_move();
             let null_eval = -self.zw_search(
                 next_node_type,
                 next_beta,
-                depth.saturating_sub(reduction),
+                next_depth,
                 max_depth,
                 next_distance,
             );
             self.board.undo();
 
             if null_eval >= beta && !null_eval.is_mate() {
-                self.data.reductions += 1;
-                next_depth = next_depth.saturating_sub(6);
+                reductions += 6;
 
-                if next_depth == 0 {
+                if depth <= 6 {
                     self.data.prunes += 1;
                     return self.evaluate(distance_from_root);
                 }
@@ -487,17 +499,21 @@ impl MoveSearcher {
         }
 
         // Cut node reduction
-        if next_depth >= 1 && node_type == NodeType::Cut {
-            self.data.reductions += 1;
-            next_depth -= 1;
+        if node_type == NodeType::Cut {
+            reductions += 2;
         }
 
         let mut moves = self.board.moves().clone();
         moves.sort_by_key(|m| self.score_move(*m));
 
+        // One reply extension
+        if moves.len() == 1 {
+            extensions += 1;
+        }
+
         // Multi-cut pruning.
         if node_type == NodeType::Cut && moves.len() > self.mc_moves && !self.board.in_check() {
-            let mc_depth = next_depth.saturating_sub(self.mc_reduction);
+            let next_depth = depth.saturating_sub(self.mc_reduction + 1);
 
             let mut count = 0;
             for m in moves.iter().take(self.mc_moves) {
@@ -505,7 +521,7 @@ impl MoveSearcher {
                 let score = -self.zw_search(
                     next_node_type,
                     next_beta,
-                    mc_depth,
+                    next_depth,
                     max_depth,
                     next_distance,
                 );
@@ -521,17 +537,18 @@ impl MoveSearcher {
             }
         }
 
+        self.data.reductions += reductions;
+        let next_depth = (depth + extensions)
+            .saturating_sub(reductions + 1)
+            .min(max_depth - distance_from_root);
+
         // Search children.
         for m in moves {
             self.board.make_move(m).expect("Legal move");
-
-            // Check extension
-            let extension = usize::from(self.board.in_check() && distance_from_root < max_depth);
-
             let score = -self.zw_search(
                 next_node_type,
                 next_beta,
-                next_depth + extension,
+                next_depth,
                 max_depth,
                 next_distance,
             );
