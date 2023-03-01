@@ -197,7 +197,8 @@ impl MoveSearcher {
 
             for &m in &moves {
                 self.board.make_move(m).expect("All moves should be legal");
-                let score = -self.pv_search(Score::min(!side), Score::max(!side), depth, 1);
+                let score =
+                    -self.pv_search(Score::min(!side), Score::max(!side), depth, depth.pow(2), 1);
                 self.board.undo();
 
                 if score > best_iteration_score {
@@ -333,6 +334,7 @@ impl MoveSearcher {
         mut alpha: Score,
         mut beta: Score,
         depth: usize,
+        max_depth: usize,
         distance_from_root: usize,
     ) -> Score {
         self.data.nodes += 1;
@@ -370,12 +372,13 @@ impl MoveSearcher {
 
             let score = if best_move.is_none() {
                 // All left-most nodes are Pv nodes.
-                -self.pv_search(-beta, -alpha, next_depth, next_distance)
+                -self.pv_search(-beta, -alpha, next_depth, max_depth, next_distance)
             } else {
                 // All sibling-nodes to Pv nodes are cut nodes.
-                let mut score = -self.zw_search(NodeType::Cut, -alpha, next_depth, next_distance);
+                let mut score =
+                    -self.zw_search(NodeType::Cut, -alpha, next_depth, max_depth, next_distance);
                 if score > alpha && score < beta {
-                    score = -self.pv_search(-beta, -alpha, next_depth, next_distance);
+                    score = -self.pv_search(-beta, -alpha, next_depth, max_depth, next_distance);
                 }
                 score
             };
@@ -401,11 +404,13 @@ impl MoveSearcher {
         alpha
     }
 
+    #[allow(clippy::too_many_lines)]
     fn zw_search(
         &mut self,
         node_type: NodeType,
         mut beta: Score,
         depth: usize,
+        max_depth: usize,
         distance_from_root: usize,
     ) -> Score {
         self.data.nodes += 1;
@@ -458,11 +463,16 @@ impl MoveSearcher {
 
         // Null-move reduction
         if current_eval >= beta && !self.board.in_check() {
-            let reduction = if depth > 6 { 4 } else { 3 };
-            let null_depth = depth.saturating_sub(reduction);
+            let reduction = 3 + usize::from(depth > 6);
 
             self.board.make_null_move();
-            let null_eval = -self.zw_search(next_node_type, next_beta, null_depth, next_distance);
+            let null_eval = -self.zw_search(
+                next_node_type,
+                next_beta,
+                depth.saturating_sub(reduction),
+                max_depth,
+                next_distance,
+            );
             self.board.undo();
 
             if null_eval >= beta && !null_eval.is_mate() {
@@ -492,7 +502,13 @@ impl MoveSearcher {
             let mut count = 0;
             for m in moves.iter().take(self.mc_moves) {
                 self.board.make_move(*m).expect("Legal move");
-                let score = -self.zw_search(next_node_type, next_beta, mc_depth, next_distance);
+                let score = -self.zw_search(
+                    next_node_type,
+                    next_beta,
+                    mc_depth,
+                    max_depth,
+                    next_distance,
+                );
                 self.board.undo();
 
                 if score >= beta {
@@ -508,7 +524,17 @@ impl MoveSearcher {
         // Search children.
         for m in moves {
             self.board.make_move(m).expect("Legal move");
-            let score = -self.zw_search(next_node_type, next_beta, next_depth, next_distance);
+
+            // Check extension
+            let extension = usize::from(self.board.in_check() && distance_from_root < max_depth);
+
+            let score = -self.zw_search(
+                next_node_type,
+                next_beta,
+                next_depth + extension,
+                max_depth,
+                next_distance,
+            );
             self.board.undo();
 
             if score >= beta {
