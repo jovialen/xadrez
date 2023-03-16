@@ -4,6 +4,7 @@ use crate::error::ParseFenError;
 use crate::fen::FenString;
 use crate::movegen;
 use crate::piece::{Piece, PieceKind, Side, PIECE_KIND_COUNT, SIDE_COUNT};
+use crate::r#move::{Move, MoveKind};
 use crate::square::{Square, BOARD_FILES, BOARD_SIZE};
 use itertools::Itertools;
 use std::hash::Hash;
@@ -62,6 +63,105 @@ impl Position {
 
     pub(crate) fn bitboards(&self) -> PositionBitboards {
         PositionBitboards::new(self)
+    }
+
+    pub(crate) fn make_move(&mut self, m: Move) {
+        const ROOK_SOURCES: [[Square; 2]; SIDE_COUNT] =
+            [[Square::H1, Square::A1], [Square::H8, Square::A8]];
+        const ROOK_DESTS: [[Square; 2]; SIDE_COUNT] =
+            [[Square::F1, Square::D1], [Square::F8, Square::D8]];
+
+        assert_ne!(m.kind, MoveKind::Any);
+
+        let friendly = self.side_to_move as usize;
+
+        // Safety: There will always be a from piece if the move is legal, and that was
+        // confirmed above.
+        let to_move = self[m.from].unwrap();
+
+        // Clear the en passant
+        self.en_passant = None;
+
+        // Do the move
+        self[m.to] = self[m.from];
+        self[m.from] = None;
+
+        if self.side_to_move == Side::Black {
+            self.halftime += 1;
+            self.fulltime += 1;
+        }
+
+        // Check for any special conditions with the move
+        match m.kind {
+            MoveKind::EnPassant => {
+                assert!(to_move.kind == PieceKind::Pawn);
+
+                let capture_square =
+                    m.to.neighbour(to_move.side.backward())
+                        .expect("Invalid en-passant target square");
+                self[capture_square] = None;
+            }
+            MoveKind::Capture => self.halftime = 0,
+            MoveKind::Promotion(into) => {
+                assert!(to_move.kind == PieceKind::Pawn);
+
+                if let Some(ref mut piece) = self[m.to] {
+                    piece.kind = into;
+                }
+            }
+            MoveKind::Castling => {
+                let side = m.to.side() as usize;
+
+                assert!(self.castling[friendly][side]);
+
+                let src = ROOK_SOURCES[friendly][side];
+                let dest = ROOK_DESTS[friendly][side];
+
+                assert_eq!(
+                    self[src],
+                    Some(Piece::new(self.side_to_move, PieceKind::Rook))
+                );
+                assert_eq!(self[dest], None);
+
+                self[dest] = self[src];
+                self[src] = None;
+            }
+            MoveKind::Any => unreachable!("No move of kind \"Any\" should ever be used."),
+            MoveKind::Quiet => (),
+        }
+
+        if to_move.kind == PieceKind::Pawn {
+            const EP_DISTANCE: f64 = 2.0;
+
+            self.halftime = 0;
+
+            if m.from.distance(m.to) >= EP_DISTANCE {
+                let ep_index = (m.from as usize + m.to as usize) / 2;
+                self.en_passant = Some(Square::try_from(ep_index).unwrap());
+            }
+        } else if to_move.kind == PieceKind::King {
+            self.castling[friendly] = [false, false];
+        }
+
+        // Update castling
+        #[allow(clippy::needless_range_loop)]
+        for side in 0..SIDE_COUNT {
+            let rook = Piece::new(
+                match side {
+                    0 => Side::White,
+                    1 => Side::Black,
+                    _ => unreachable!(),
+                },
+                PieceKind::Rook,
+            );
+
+            for i in 0..2 {
+                self.castling[side][i] &= self[ROOK_SOURCES[side][i]] == Some(rook);
+            }
+        }
+
+        // Update side to move
+        self.side_to_move = !self.side_to_move;
     }
 }
 

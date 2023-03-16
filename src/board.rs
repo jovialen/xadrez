@@ -5,9 +5,9 @@
 use crate::error::{MoveError, ParseFenError};
 use crate::evaluation::score::Score;
 use crate::fen::FEN_STARTING_POSITION;
-use crate::piece::{Piece, PieceKind, Side, SIDE_COUNT};
+use crate::piece::{Piece, PieceKind, Side};
 use crate::position::{Position, PositionBitboards, EMPTY_POSITION};
-use crate::r#move::{Move, MoveKind};
+use crate::r#move::Move;
 use crate::square::{Square, BOARD_SIZE};
 use crate::{evaluation, movegen};
 
@@ -126,13 +126,7 @@ impl Chessboard {
     ///
     /// Will return a [`MoveError`] if the given move cannot be made on the
     /// board.
-    #[allow(clippy::missing_panics_doc)]
     pub fn make_move(&mut self, m: Move) -> Result<(), MoveError> {
-        const ROOK_SOURCES: [[Square; 2]; SIDE_COUNT] =
-            [[Square::H1, Square::A1], [Square::H8, Square::A8]];
-        const ROOK_DESTS: [[Square; 2]; SIDE_COUNT] =
-            [[Square::F1, Square::D1], [Square::F8, Square::D8]];
-
         // Check if move is legal
         let m = if let Some(legal) = self.legal_moves.iter().find(|&legal| legal == &m) {
             // Filter out Any kind moves with the actual legal equivilant.
@@ -141,99 +135,11 @@ impl Chessboard {
             return Err(MoveError::IllegalMove);
         };
 
-        let friendly = self.position.side_to_move as usize;
-
         // Save the current position in the history
         self.save_current_to_history();
 
-        // Safety: There will always be a from piece if the move is legal, and that was
-        // confirmed above.
-        let to_move = self.position[m.from].unwrap();
-
-        // Clear the en passant
-        self.position.en_passant = None;
-
-        // Do the move
-        self.position[m.to] = self.position[m.from];
-        self.position[m.from] = None;
-
-        if self.position.side_to_move == Side::Black {
-            self.position.halftime += 1;
-            self.position.fulltime += 1;
-        }
-
-        // Check for any special conditions with the move
-        match m.kind {
-            MoveKind::EnPassant => {
-                assert!(to_move.kind == PieceKind::Pawn);
-
-                let capture_square =
-                    m.to.neighbour(to_move.side.backward())
-                        .expect("Invalid en-passant target square");
-                self.position[capture_square] = None;
-            }
-            MoveKind::Capture => self.position.halftime = 0,
-            MoveKind::Promotion(into) => {
-                assert!(to_move.kind == PieceKind::Pawn);
-
-                if let Some(ref mut piece) = self.position[m.to] {
-                    piece.kind = into;
-                }
-            }
-            MoveKind::Castling => {
-                let side = m.to.side() as usize;
-
-                assert!(self.position.castling[friendly][side]);
-
-                let src = ROOK_SOURCES[friendly][side];
-                let dest = ROOK_DESTS[friendly][side];
-
-                assert_eq!(
-                    self.position[src],
-                    Some(Piece::new(self.position.side_to_move, PieceKind::Rook))
-                );
-                assert_eq!(self.position[dest], None);
-
-                self.position[dest] = self.position[src];
-                self.position[src] = None;
-            }
-            MoveKind::Any => unreachable!("No move of kind \"Any\" should ever be used."),
-            MoveKind::Quiet => (),
-        }
-
-        if to_move.kind == PieceKind::Pawn {
-            const EP_DISTANCE: f64 = 2.0;
-
-            self.position.halftime = 0;
-
-            if m.from.distance(m.to) >= EP_DISTANCE {
-                let ep_index = (m.from as usize + m.to as usize) / 2;
-                self.position.en_passant = Some(Square::try_from(ep_index).unwrap());
-            }
-        } else if to_move.kind == PieceKind::King {
-            self.position.castling[friendly] = [false, false];
-        }
-
-        // Update castling
-        #[allow(clippy::needless_range_loop)]
-        for side in 0..SIDE_COUNT {
-            let rook = Piece::new(
-                match side {
-                    0 => Side::White,
-                    1 => Side::Black,
-                    _ => unreachable!(),
-                },
-                PieceKind::Rook,
-            );
-
-            for i in 0..2 {
-                self.position.castling[side][i] &=
-                    self.position[ROOK_SOURCES[side][i]] == Some(rook);
-            }
-        }
-
-        // Update side to move
-        self.position.side_to_move = !self.position.side_to_move;
+        // Make move
+        self.position.make_move(m);
 
         // Update legal moves
         self.bitboards = self.position.bitboards();
