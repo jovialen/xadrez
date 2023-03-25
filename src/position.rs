@@ -154,8 +154,19 @@ impl ops::Index<Square> for Position {
 }
 
 impl PositionData {
+    pub(crate) fn empty() -> Self {
+        Self {
+            squares: [None; 64],
+            side_to_move: Side::White,
+            castling: [[false; 2]; SIDE_COUNT],
+            en_passant: None,
+            halftime: 0,
+            fulltime: 1,
+        }
+    }
+
     #[inline]
-    fn pieces(&self) -> Vec<(Square, Piece)> {
+    pub(crate) fn pieces(&self) -> Vec<(Square, Piece)> {
         self.squares()
             .into_iter()
             .filter_map(|(square, piece)| Some((square, piece?)))
@@ -163,7 +174,7 @@ impl PositionData {
     }
 
     #[inline]
-    fn squares(&self) -> [(Square, Option<Piece>); 64] {
+    pub(crate) fn squares(&self) -> [(Square, Option<Piece>); 64] {
         let mut result = [(Square::A1, None); 64];
 
         for (i, piece) in self.squares.into_iter().enumerate() {

@@ -10,6 +10,7 @@
 
 mod bitboards;
 pub mod board;
+pub mod builder;
 pub mod error;
 pub mod evaluation;
 pub mod fen;
