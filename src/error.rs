@@ -37,14 +37,10 @@ pub enum ParseFenError {
 /// An error which can be returned while parsing long algebraic notation.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ParseLANError {
-    /// Either the to or from square was missing.
-    MissingField,
     /// Either the to or from square was invalid.
     InvalidSquare,
     /// The promotion of the piece was invalid.
     InvalidPromotion,
-    /// The input was either too long or too short to be vaild.
-    InvalidSize,
     /// The input was empty.
     Empty,
 }
@@ -86,10 +82,8 @@ impl Error for ParseLANError {}
 impl fmt::Display for ParseLANError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            Self::MissingField => "missing either from or to square",
             Self::InvalidSquare => "invalid square notation",
             Self::InvalidPromotion => "invalid piece for promotion",
-            Self::InvalidSize => "incorrectly formatted LAN string",
             Self::Empty => "empty LAN string",
         })
     }

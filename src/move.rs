@@ -43,34 +43,40 @@ impl FromStr for Move {
     type Err = ParseLANError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let s = s.trim();
+        const PIECE_CHARS: [char; 6] = ['p', 'r', 'n', 'b', 'q', 'k'];
+        const SEPARATORS: [char; 3] = [' ', '-', 'x'];
 
         if s.is_empty() {
             return Err(ParseLANError::Empty);
         }
 
-        if s.len() < 4 || s.len() > 5 {
-            return Err(ParseLANError::InvalidSize);
-        }
+        let s = s.trim().to_ascii_lowercase();
+        let mut s = s.trim_start_matches(PIECE_CHARS); // Just what piece is being moves, irrelevant.
 
-        let (from, to) = s.split_at(2);
+        let kind = if s.ends_with(PIECE_CHARS) {
+            let promote_to = match s.chars().last().unwrap() {
+                'r' => PieceKind::Rook,
+                'n' => PieceKind::Knight,
+                'b' => PieceKind::Bishop,
+                'q' => PieceKind::Queen,
+                _ => Err(Self::Err::InvalidPromotion)?,
+            };
 
-        if s.len() == 4 {
-            Ok(Self {
-                from: Square::from_str(from).or(Err(ParseLANError::InvalidSquare))?,
-                to: Square::from_str(to).or(Err(ParseLANError::InvalidSquare))?,
-                kind: MoveKind::Any,
-            })
+            s = s.trim_end_matches(PIECE_CHARS);
+
+            MoveKind::Promotion(promote_to)
         } else {
-            Ok(Self {
-                from: Square::from_str(from).or(Err(ParseLANError::InvalidSquare))?,
-                to: Square::from_str(to).or(Err(ParseLANError::InvalidSquare))?,
-                kind: MoveKind::Promotion(
-                    PieceKind::try_from(s.chars().nth(4).unwrap())
-                        .or(Err(ParseLANError::InvalidPromotion))?,
-                ),
-            })
-        }
+            MoveKind::Any
+        };
+
+        let split_index = s.find(SEPARATORS).unwrap_or(2);
+        let mut parts = s.split_at(split_index);
+        parts.1 = parts.1.trim_start_matches(SEPARATORS);
+
+        let from = Square::from_str(parts.0).map_err(|_| Self::Err::InvalidSquare)?;
+        let to = Square::from_str(parts.1).map_err(|_| Self::Err::InvalidSquare)?;
+
+        Ok(Self { from, to, kind })
     }
 }
 
