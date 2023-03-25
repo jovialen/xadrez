@@ -24,7 +24,7 @@ pub mod square;
 
 /// Quick import for all of the most commonly used data types.
 pub mod prelude {
-    pub use crate::board::Chessboard;
+    pub use crate::board::{Chessboard, DrawReason, GameState};
     pub use crate::piece::{Piece, PieceKind, Side};
     pub use crate::r#move::Move;
     pub use crate::square::Square;

@@ -9,7 +9,6 @@ use xadrez::error::ParseFenError;
 use xadrez::fen::FEN_STARTING_POSITION;
 use xadrez::r#move::Move;
 use xadrez::search::MoveSearcher;
-use xadrez::square::Square;
 
 fn position<'a, I: Iterator<Item = &'a str>>(
     board: &mut Chessboard,
@@ -28,23 +27,22 @@ fn position<'a, I: Iterator<Item = &'a str>>(
 }
 
 fn pretty_print_position<'a, I: Iterator<Item = &'a str>>(board: &Chessboard, mut args: I) {
-    let attack_square_char = args.next().unwrap_or(" ");
+    let move_square_char = args.next().unwrap_or(" ");
 
     println!("    A   B   C   D   E   F   G   H  ");
     println!("  +---+---+---+---+---+---+---+---+");
-    for (rr, rank) in board.squares().chunks(8).enumerate().rev() {
-        print!("{} |", rr + 1);
-        for (f, piece) in rank.iter().enumerate() {
-            let square = Square::from_rank_file(rr, f).unwrap();
-            print!(
-                " {} |",
-                match piece {
-                    Some(p) => p.to_string(),
-                    None if board.moves().iter().any(|m| m.to == square) =>
-                        attack_square_char.to_string(),
-                    _ => " ".to_string(),
-                }
-            );
+    for (rank_index, rank) in board.squares().chunks(8).enumerate().rev() {
+        print!("{} |", rank_index + 1);
+        for (square, content) in rank {
+            let square_str = if let Some(piece) = content {
+                piece.to_string()
+            } else if board.moves().iter().any(|m| m.to == *square) {
+                move_square_char.to_string()
+            } else {
+                " ".to_string()
+            };
+
+            print!(" {} |", square_str);
         }
         println!("\n  +---+---+---+---+---+---+---+---+");
     }

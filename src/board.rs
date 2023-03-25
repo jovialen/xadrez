@@ -3,177 +3,192 @@
 //! Provides the structures relating to the chessboard as a whole.
 
 use crate::error::{MoveError, ParseFenError};
+use crate::evaluation;
 use crate::evaluation::score::Score;
 use crate::fen::FEN_STARTING_POSITION;
-use crate::piece::{Piece, PieceKind, Side};
-use crate::position::{Position, PositionBitboards, EMPTY_POSITION};
+use crate::piece::{Piece, Side};
+use crate::position::Position;
 use crate::r#move::Move;
-use crate::square::{Square, BOARD_SIZE};
-use crate::{evaluation, movegen};
+use crate::square::Square;
 
-use std::str::FromStr;
-use std::{fmt, ops};
-
-/// Structure representing a chessboard.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// A game of Chess.
+#[derive(Clone, PartialEq, Eq)]
 pub struct Chessboard {
     pub(crate) position: Position,
-    pub(crate) bitboards: PositionBitboards,
-    legal_moves: Vec<Move>,
-    history: Vec<(Position, Vec<Move>)>,
+    moves: Vec<Move>,
+    history: Vec<Position>,
 }
 
-/// Chessboard builder.
-///
-/// This structure allows you to build a position without worrying about the
-/// legality of it untill it is built.
-#[allow(clippy::module_name_repetitions)]
-#[derive(Clone)]
-pub struct BoardBuilder {
-    position: Position,
-}
-
-/// The possible states of the game.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Represents the current state of the chess game.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum GameState {
-    /// The side to move is in checkmate.
+    /// The game has ended with a checkmate.
     Checkmate,
-    /// A draw has been reached.
+    /// The game has ended with a draw, with the reason for the draw specified.
     Draw(DrawReason),
-    /// The game is not finished.
+    /// The game is currently in progress.
     Playing,
 }
 
-/// The reason for the draw.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// A reason for a draw in a chess game.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum DrawReason {
-    /// The side to move has no legal moves, but is not in check.
+    /// The game is a draw due to stalemate.
     Stalemate,
-    /// No pawn has moved and no captures have occured in the last 50 moves.
+    /// The game is a draw due to the 50-move rule.
     Rule50,
 }
 
 impl Chessboard {
-    /// Create a new chessboard from a FEN string.
+    /// Constructs a new `Chessboard` from a Forsyth-Edwards Notation (FEN)
+    /// string.
+    ///
+    /// If you are uncertain whether the given FEN string is valid, use the
+    /// `from_fen` function instead, which returns a `Result`.
     ///
     /// # Arguments
     ///
-    /// * `fen` - The FEN string with the board position.
+    /// * `fen` - A FEN string representing the position of the chessboard.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use xadrez::prelude::*;
+    ///
+    /// let starting_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    ///
+    /// let board = Chessboard::from_fen(starting_fen).unwrap();
+    ///
+    /// assert_eq!(board.side_to_move(), Side::White);
+    /// ```
     ///
     /// # Panics
     ///
-    /// If the FEN string is invalid. If the FEN string may be invalid, use
-    /// [`Chessboard::from_fen`] instead.
+    /// This function panics if the given FEN string is invalid.
     #[must_use]
     pub fn new(fen: &str) -> Self {
-        Self::from_fen(fen).unwrap()
+        Self::from_fen(fen).expect("Failed to create chessboard; Invalid fen")
     }
 
-    /// Create a chessboard from a FEN string.
+    /// Creates a new Chessboard from a Forsyth-Edwards Notation (FEN) string.
     ///
-    /// # Arguments
+    /// The FEN string describes the starting position of the Chessboard and
+    /// includes information about which player is to move next, castling
+    /// rights, en passant squares, and the halfmove clock and fullmove
+    /// clock for move tracking.
     ///
-    /// * `fen` - The FEN string to parse.
+    /// # Examples
+    ///
+    /// ```
+    /// use xadrez::prelude::*;
+    ///
+    /// let starting_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    ///
+    /// let board = Chessboard::from_fen(starting_fen).unwrap();
+    ///
+    /// assert_eq!(board.side_to_move(), Side::White);
+    /// ```
     ///
     /// # Errors
     ///
-    /// Can return a [`ParseFenError`] if the given FEN string is not valid.
+    /// If the given FEN string is invalid, a `ParseFenError` will be returned.
     pub fn from_fen(fen: &str) -> Result<Self, ParseFenError> {
-        let position = Position::from_str(fen)?;
-        let bitboards = position.bitboards();
-        let legal_moves = movegen::generate_legal_moves(&position, &bitboards);
+        let position = Position::from_fen(fen)?;
+        let moves = position.generate_moves();
 
         Ok(Self {
             position,
-            bitboards,
-            legal_moves,
+            moves,
             history: Vec::new(),
         })
     }
 
-    /// Set the position of the chessboard with a FEN string.
-    ///
-    /// # Arguments
-    ///
-    /// * `fen` - FEN string of the new position.
-    ///
-    /// # Errors
-    ///
-    /// Can return a [`ParseFenError`] if the given FEN string is not valid.
-    pub fn set_position(&mut self, fen: &str) -> Result<(), ParseFenError> {
-        self.save_current_to_history();
-        self.position = Position::from_str(fen)?;
-        self.bitboards = self.position.bitboards();
-        self.legal_moves = movegen::generate_legal_moves(&self.position, &self.bitboards);
-        Ok(())
-    }
-
-    /// Get all possible legal moves.
+    /// Returns a vector of all possible legal moves in the current position.
     #[must_use]
-    pub fn moves(&self) -> &Vec<Move> {
-        &self.legal_moves
+    pub fn moves(&self) -> Vec<Move> {
+        self.moves.clone()
     }
 
-    /// Make a move on the chessboard.
+    /// Checks if the given move is legal on the chessboard.
     ///
-    /// The move must be legal.
+    /// # Examples
     ///
-    /// # Arguments
+    /// ```
+    /// use xadrez::prelude::*;
     ///
-    /// * `m` - A legal move to make on the board.
+    /// let board = Chessboard::new("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    /// let e2e4 = Move::new(Square::E2, Square::E4).unwrap();
+    /// assert!(board.is_legal(e2e4));
     ///
-    /// # Errors
-    ///
-    /// Will return a [`MoveError`] if the given move cannot be made on the
-    /// board.
-    pub fn make_move(&mut self, m: Move) -> Result<(), MoveError> {
-        // Check if move is legal
-        let m = if let Some(legal) = self.legal_moves.iter().find(|&legal| legal == &m) {
-            // Filter out Any kind moves with the actual legal equivilant.
-            *legal
-        } else {
-            return Err(MoveError::IllegalMove);
-        };
-
-        // Save the current position in the history
-        self.save_current_to_history();
-
-        // Make move
-        self.position.make_move(m);
-
-        // Update legal moves
-        self.bitboards = self.position.bitboards();
-        self.legal_moves = movegen::generate_legal_moves(&self.position, &self.bitboards);
-
-        Ok(())
+    /// let invalid_move = Move::new(Square::E3, Square::E4).unwrap();
+    /// assert!(!board.is_legal(invalid_move));
+    /// ```
+    #[must_use]
+    pub fn is_legal(&self, m: Move) -> bool {
+        self.moves.contains(&m)
     }
 
-    pub(crate) fn make_null_move(&mut self) {
-        self.save_current_to_history();
-
-        // Update side to move
-        self.position.side_to_move = !self.position.side_to_move;
-
-        // Update legal moves
-        self.bitboards = self.position.bitboards();
-        self.legal_moves = movegen::generate_legal_moves(&self.position, &self.bitboards);
+    /// Returns a vector of tuples containing all the pieces on the board along
+    /// with their squares.
+    #[must_use]
+    pub fn pieces(&self) -> Vec<(Square, Piece)> {
+        self.position.pieces()
     }
 
-    /// Undo the last move.
-    pub fn undo(&mut self) {
-        if let Some((last_pos, last_moves)) = self.history.pop() {
-            self.position = last_pos;
-            self.bitboards = self.position.bitboards();
-            self.legal_moves = last_moves;
-        }
+    /// Get an array of the squares on the board and the piece on it.
+    ///
+    /// Returns an array representing the chessboard, with each element
+    /// containing a tuple of the square and an optional piece occupying it. If
+    /// a square is empty, its corresponding tuple contains a None value for the
+    /// piece.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use xadrez::prelude::*;
+    ///
+    /// let board = Chessboard::new("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    /// let squares = board.squares();
+    ///
+    /// assert_eq!(squares[0], (Square::A1, Piece::new(Side::White, PieceKind::Rook)));
+    /// assert_eq!(squares[1], (Square::B1, Piece::new(Side::White, PieceKind::Knight)));
+    /// assert_eq!(squares[2], (Square::C1, Piece::new(Side::White, PieceKind::Bishop)));
+    /// // and so on...
+    /// ```
+    #[must_use]
+    pub fn squares(&self) -> [(Square, Option<Piece>); 64] {
+        self.position.squares()
     }
 
-    /// Get the current state of the board.
+    /// Returns the current state of the game, which can be one of three
+    /// possible values:
+    ///
+    /// * `GameState::Checkmate` - The game has ended due to one player being in
+    ///   checkmate.
+    /// * `GameState::Draw(reason)` - The game has ended in a draw, with a
+    ///   specific `DrawReason` given.
+    /// * `GameState::Playing` - The game is still ongoing.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use xadrez::Chessboard;
+    /// let board = Chessboard::new("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+    /// assert_eq!(board.state(), GameState::Playing);
+    /// ```
+    ///
+    /// A draw can occur for different reasons, as represented by the
+    /// `DrawReason` enum:
+    ///
+    /// * `DrawReason::Stalemate`: The player whose turn it is to move has no
+    ///   legal moves, but is not in check.
+    /// * `DrawReason::Rule50`: The game is drawn because 50 moves by each
+    ///   player have been played without a pawn move or capture.
     #[must_use]
     pub fn state(&self) -> GameState {
-        if self.position.halftime >= 50 {
+        if self.position.data.halftime >= 50 {
             GameState::Draw(DrawReason::Rule50)
-        } else if self.legal_moves.is_empty() {
+        } else if self.moves.is_empty() {
             if self.in_check() {
                 GameState::Checkmate
             } else {
@@ -184,252 +199,197 @@ impl Chessboard {
         }
     }
 
-    /// Check if the side to move is currently in check.
+    /// Returns true if the current side to move is in check, and false
+    /// otherwise.
     #[must_use]
-    #[inline]
     pub fn in_check(&self) -> bool {
-        self.bitboards.count_checkers() > 0
+        self.position.in_check()
     }
 
-    /// Evaluate the current position relative to the side to move.
+    /// Returns the Side enum value representing the current side to move,
+    /// either `Side::White` or `Side::Black`.
     #[must_use]
-    #[inline]
-    pub fn evaluate(&self) -> Score {
-        evaluation::evaluate_position(self.state(), &self.position, &self.bitboards)
+    pub fn side_to_move(&self) -> Side {
+        self.position.side_to_move()
     }
 
-    /// Perft move enumeration function.
+    /// Evaluates the current position of the chessboard and returns a `Score`
+    /// struct.
     ///
-    /// Counts all possible legal moves from the current position to a given
-    /// depth.
+    /// The evaluation function uses either HCE (Handcrafted Evaluation
+    /// Function) or NNUE (Efficiently Updatable Neural Network Evaluation
+    /// Function) depending on whether the nnue feature is enabled at compile
+    /// time. NNUE is a neural network-based evaluation function that has been
+    /// shown to be much more efficient than HCE, and is used if the
+    /// feature is enabled. In testing, this NNUE implementation has a better
+    /// early and midgame, but struggles more with the endgame.
+    #[must_use]
+    pub fn evaluate(&self) -> Score {
+        evaluation::evaluate_position(self.state(), &self.position)
+    }
+
+    /// Sets the position on the chessboard to the one specified by the
+    /// Forsyth-Edwards Notation (FEN) string `fen`.
+    ///
+    /// If the FEN string is invalid, the position remains unchanged and an
+    /// error is returned.
     ///
     /// # Arguments
     ///
-    /// * `depth` - How many max moves to make. Must be at least 1.
-    /// * `print` - If the nodes for each node should be printed.
-    #[allow(clippy::missing_panics_doc)]
-    pub fn perft(&mut self, depth: usize, print: bool) -> usize {
+    /// * `fen`: A string slice containing the FEN notation of the desired
+    ///   position.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `ParseFenError` if the given FEN string is invalid.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use xadrez::prelude::*;
+    ///
+    /// let mut board = Chessboard::default();
+    /// assert!(board.set_position("r1bqkbnr/pppppppp/2n5/1B6/4P3/8/PPPP1PPP/RNBQK1NR w KQkq - 0 2").is_ok());
+    /// ```
+    ///
+    /// # Remarks
+    ///
+    /// The previously stored position can be restored by calling the `undo`
+    /// function.
+    pub fn set_position(&mut self, fen: &str) -> Result<(), ParseFenError> {
+        let position = Position::from_fen(fen)?;
+
+        self.history.push(self.position);
+
+        self.position = position;
+        self.moves = self.position.generate_moves();
+
+        Ok(())
+    }
+
+    /// Makes a move on the chessboard.
+    ///
+    /// If the move isn't legal, no changes will occur on the board and the
+    /// function will return an error. If the move is legal, the function will
+    /// return the move that was made.
+    ///
+    /// # Arguments
+    ///
+    /// * `m` - The [`Move`] to be made.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`MoveError`] if the move isn't legal.
+    pub fn make_move(&mut self, m: Move) -> Result<Move, MoveError> {
+        let m = if let Some(legal) = self.moves.iter().find(|&legal| legal == &m) {
+            Ok(*legal)
+        } else {
+            Err(MoveError::IllegalMove)
+        }?;
+
+        self.history.push(self.position);
+
+        self.position = self.position.make_move(m);
+        self.moves = self.position.generate_moves();
+
+        Ok(m)
+    }
+
+    pub(crate) fn make_null_move(&mut self) {
+        self.history.push(self.position);
+
+        self.position = self.position.make_null_move();
+        self.moves = self.position.generate_moves();
+    }
+
+    /// Undo the most recent move made on the board.
+    ///
+    /// If there is no move to undo, the function returns without modifying
+    /// the current position.
+    ///
+    /// If a position was changed using the `set_position` function, the last
+    /// position will also be restored.
+    pub fn undo(&mut self) {
+        if let Some(last_position) = self.history.pop() {
+            self.position = last_position;
+            self.moves = self.position.generate_moves();
+        }
+    }
+
+    /// Returns the number of leaf nodes in the game tree for the current
+    /// position at the given depth. This function is primarily used for testing
+    /// and debugging purposes.
+    ///
+    /// The `print` flag indicates whether or not to print the result of each
+    /// move calculation to the console. The result is the total number of leaf
+    /// nodes found in the game tree at the given depth.
+    ///
+    /// # Arguments
+    ///
+    /// * `depth` - The depth at which to calculate the leaf nodes in the game
+    /// tree.
+    /// * `print` - Whether or not to print the result of each move calculation
+    /// to the console.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use xadrez::Chessboard;
+    ///
+    /// let board = Chessboard::default();
+    /// let nodes = board.perft(4, false);
+    /// assert_eq!(nodes, 197281);
+    /// ```
+    #[must_use]
+    pub fn perft(&self, depth: usize, print: bool) -> usize {
+        Self::perft_internal(&self.position, depth, print)
+    }
+
+    fn perft_internal(position: &Position, depth: usize, print: bool) -> usize {
         if depth == 0 {
             return 1;
         }
 
-        let moves = self.moves().clone();
+        let moves = position.generate_moves();
 
-        if depth == 1 && !print {
+        if (depth == 1 || moves.is_empty()) && !print {
             return moves.len();
         }
 
         let mut nodes = 0;
-
         for m in moves {
-            // Safety: All moves should be legal
-            self.make_move(m).unwrap();
-            let count = self.perft(depth - 1, false);
+            let count = Self::perft_internal(&position.make_move(m), depth - 1, false);
             nodes += count;
-            self.undo();
 
             if print {
                 println!("{m}: {count}");
             }
         }
-
         nodes
-    }
-
-    /// Check if a move is legal.
-    ///
-    /// # Arguments
-    ///
-    /// * `m` - The move to validate.
-    #[must_use]
-    #[inline]
-    pub fn is_legal(&self, m: Move) -> bool {
-        self.legal_moves.contains(&m)
-    }
-
-    /// Get a refrence to the board squares.
-    ///
-    /// This function returns a refrence to the internal one dimentional array
-    /// of squares. The array is laid out such that it can be directly
-    /// indexed with the integer values of the [`Square`] enum.
-    #[must_use]
-    #[inline]
-    pub fn squares(&self) -> &[Option<Piece>; BOARD_SIZE] {
-        &self.position.squares
-    }
-
-    /// Get all the pieces on the board.
-    ///
-    /// This function returns a vector of all the pieces on the board in a toupe
-    /// with its position on the board.
-    #[must_use]
-    #[inline]
-    pub fn pieces(&self) -> Vec<(Piece, Square)> {
-        self.position.pieces()
-    }
-
-    /// Get the current side to move.
-    #[must_use]
-    #[inline]
-    pub const fn side_to_move(&self) -> Side {
-        self.position.side_to_move
-    }
-
-    fn save_current_to_history(&mut self) {
-        self.history.push((self.position, self.legal_moves.clone()));
     }
 }
 
 impl Default for Chessboard {
     fn default() -> Self {
-        // Safety: The FEN starting position constant should always be valid.
+        // Safety: Unwrap here is fine since the FEN starting position is always valid.
         Self::from_fen(FEN_STARTING_POSITION).unwrap()
     }
 }
 
-impl ops::Index<Square> for Chessboard {
-    type Output = Option<Piece>;
-
-    fn index(&self, index: Square) -> &Self::Output {
-        &self.position[index]
+impl std::fmt::Debug for Chessboard {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        write!(f, "{}", self)
     }
 }
 
-impl FromStr for Chessboard {
-    type Err = ParseFenError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Self::from_fen(s)
+impl std::fmt::Display for Chessboard {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        write!(f, "{}", self.position)
     }
 }
 
-impl fmt::Display for Chessboard {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.position.to_string().as_str())
-    }
-}
-
-impl BoardBuilder {
-    /// Create a new board builder.
-    ///
-    /// The board will by default be completly empty, with no pieces on the
-    /// board, no time elapsed, and no castling rights.
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            position: EMPTY_POSITION,
-        }
-    }
-
-    /// Build the Chessboard.
-    ///
-    /// # Errors
-    ///
-    /// Can return a [`ParseFenError`] if the position in the builder is not
-    /// legal.
-    pub fn build(self) -> Result<Chessboard, ParseFenError> {
-        let fen = self.position.to_string();
-        Chessboard::from_str(fen.as_str())
-    }
-
-    /// Set a piece on the board.
-    ///
-    /// No pieces are placed on the board by default.
-    ///
-    /// # Arguments
-    ///
-    /// * `square` - Where to place the piece.
-    /// * `piece` - The piece on the square.
-    #[must_use]
-    pub fn piece(mut self, square: Square, piece: Piece) -> Self {
-        self.position[square] = Some(piece);
-        self
-    }
-
-    /// Set the side to move.
-    ///
-    /// Initially set to white.
-    ///
-    /// # Arguments
-    ///
-    /// * `side` - The side to make a move.
-    #[must_use]
-    pub fn side_to_move(mut self, side: Side) -> Self {
-        self.position.side_to_move = side;
-        self
-    }
-
-    /// Set castling rights.
-    ///
-    /// Initially neither side has any castling rights, even if both the king
-    /// and rooks are in position.
-    ///
-    /// # Arguments
-    ///
-    /// * `side` - The side to set the castling right for.
-    /// * `kingside` - `true` for kingside castling, `false` for queenside
-    ///   castling.
-    /// * `allowed` - Whether or not to allow castling.
-    #[must_use]
-    pub fn castling(mut self, side: Side, kingside: bool, allowed: bool) -> Self {
-        let i = if kingside {
-            PieceKind::King as usize
-        } else {
-            PieceKind::Queen as usize
-        };
-
-        self.position.castling[side as usize][i] = allowed;
-        self
-    }
-
-    /// Set the en passant square.
-    ///
-    /// If not set explicitly here, no en passant square will be set at all.
-    ///
-    /// # Arguments
-    ///
-    /// * `target_square` - The en passant square.
-    #[must_use]
-    pub fn en_passant(mut self, target_square: Square) -> Self {
-        self.position.en_passant = Some(target_square);
-        self
-    }
-
-    /// Set the halftime.
-    ///
-    /// This has an initial value of 0.
-    ///
-    /// # Arguments
-    ///
-    /// * `halftime` - Moves since last capture or pawn push.
-    #[must_use]
-    pub fn halftime(mut self, halftime: u32) -> Self {
-        self.position.halftime = halftime;
-        self
-    }
-
-    /// Set the fulltime.
-    ///
-    /// This has an initial value of 1.
-    ///
-    /// # Arguments
-    ///
-    /// * `fulltime` - Moves since the start of the game.
-    #[must_use]
-    pub fn fulltime(mut self, fulltime: u32) -> Self {
-        self.position.fulltime = fulltime;
-        self
-    }
-}
-
-impl Default for BoardBuilder {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl fmt::Display for GameState {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Display for GameState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Draw(reason) => write!(f, "Draw by {reason}"),
             _ => write!(f, "{self:?}"),
@@ -437,8 +397,8 @@ impl fmt::Display for GameState {
     }
 }
 
-impl fmt::Display for DrawReason {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Display for DrawReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             Self::Stalemate => "stalemate",
             Self::Rule50 => "50 move rule",
@@ -450,16 +410,13 @@ impl fmt::Display for DrawReason {
 mod tests {
     use super::*;
     use crate::fen::FEN_EMPTY_POSITION;
-    #[allow(clippy::wildcard_imports)]
-    use crate::piece::constants::*;
-    use crate::square::Direction;
 
     fn test_fen(fen: &str, err: Result<(), ParseFenError>) {
         let chessboard = Chessboard::from_fen(fen);
-        if let Err(e) = err {
-            assert_eq!(chessboard, Err(e));
-        } else {
+        if err.is_ok() {
             assert_eq!(chessboard.expect(fen).to_string(), fen);
+        } else {
+            assert_eq!(chessboard.err(), err.err());
         }
     }
 
@@ -488,54 +445,5 @@ mod tests {
             "1nbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/1NBQKBN1 w KQq - 0 1",
             Err(ParseFenError::IllegalCastling),
         );
-    }
-
-    #[test]
-    fn test_board_building() {
-        let board = BoardBuilder::new()
-            .piece(Square::A1, WHITE_ROOK)
-            .piece(Square::H1, WHITE_ROOK)
-            .piece(Square::B1, WHITE_KNIGHT)
-            .piece(Square::G1, WHITE_KNIGHT)
-            .piece(Square::C1, WHITE_BISHOP)
-            .piece(Square::F1, WHITE_BISHOP)
-            .build();
-        assert_eq!(board, Err(ParseFenError::MissingKing));
-
-        let board = BoardBuilder::new()
-            .piece(Square::E1, WHITE_KING)
-            .piece(Square::E8, BLACK_KING)
-            .side_to_move(Side::Black)
-            .halftime(10)
-            .fulltime(11)
-            .build();
-        assert_eq!(
-            board.map(|board| board.to_string()),
-            Ok(String::from("4k3/8/8/8/8/8/8/4K3 b - - 10 11"))
-        );
-
-        let board = BoardBuilder::new()
-            .piece(Square::E1, WHITE_KING)
-            .piece(Square::E8, BLACK_KING)
-            .piece(Square::A1, WHITE_ROOK)
-            .castling(Side::White, false, true)
-            .build();
-        assert_eq!(
-            board.map(|board| board.to_string()),
-            Ok(String::from("4k3/8/8/8/8/8/8/R3K3 w Q - 0 1"))
-        );
-    }
-
-    #[test]
-    fn test_neighbour_squares() {
-        assert_eq!(Square::A1.neighbour(Direction::North), Some(Square::A2));
-        assert_eq!(Square::A2.neighbour(Direction::South), Some(Square::A1));
-        assert_eq!(Square::A1.neighbour(Direction::East), Some(Square::B1));
-        assert_eq!(Square::B1.neighbour(Direction::West), Some(Square::A1));
-
-        assert_eq!(Square::A1.neighbour(Direction::NorthEast), Some(Square::B2));
-        assert_eq!(Square::B2.neighbour(Direction::SouthWest), Some(Square::A1));
-        assert_eq!(Square::B1.neighbour(Direction::NorthWest), Some(Square::A2));
-        assert_eq!(Square::A2.neighbour(Direction::SouthEast), Some(Square::B1));
     }
 }

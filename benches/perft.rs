@@ -3,7 +3,7 @@ use std::time::Duration;
 use xadrez::board::Chessboard;
 
 fn perft_benchmark(c: &mut Criterion) {
-    let mut board = Chessboard::default();
+    let board = Chessboard::default();
 
     let mut low_depth = c.benchmark_group("perft-low-depth");
     low_depth.bench_function("perft 1", |b| b.iter(|| board.perft(black_box(1), false)));

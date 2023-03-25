@@ -218,3 +218,21 @@ impl Direction {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_neighbour_squares() {
+        assert_eq!(Square::A1.neighbour(Direction::North), Some(Square::A2));
+        assert_eq!(Square::A2.neighbour(Direction::South), Some(Square::A1));
+        assert_eq!(Square::A1.neighbour(Direction::East), Some(Square::B1));
+        assert_eq!(Square::B1.neighbour(Direction::West), Some(Square::A1));
+
+        assert_eq!(Square::A1.neighbour(Direction::NorthEast), Some(Square::B2));
+        assert_eq!(Square::B2.neighbour(Direction::SouthWest), Some(Square::A1));
+        assert_eq!(Square::B1.neighbour(Direction::NorthWest), Some(Square::A2));
+        assert_eq!(Square::A2.neighbour(Direction::SouthEast), Some(Square::B1));
+    }
+}

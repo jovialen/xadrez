@@ -185,7 +185,7 @@ impl MoveSearcher {
     #[must_use]
     pub fn search(mut self) -> SearchData {
         let max_depth = self.depth.unwrap_or(usize::MAX).max(1);
-        let side = self.board.position.side_to_move;
+        let side = self.board.position.data.side_to_move;
 
         let moves = self.board.moves().clone();
         if moves.is_empty() {
@@ -252,7 +252,7 @@ impl MoveSearcher {
     }
 
     fn score_move(&self, m: Move) -> i32 {
-        let friendly = self.board.position.side_to_move as usize;
+        let friendly = self.board.position.data.side_to_move as usize;
         let hostile = 1 ^ friendly;
 
         let mut score = 0;
@@ -265,7 +265,7 @@ impl MoveSearcher {
             score += evaluation::hce::piece_value(to, false);
         }
 
-        if self.board.bitboards.attacked_by[hostile][PieceKind::Pawn as usize].get(m.to) {
+        if self.board.position.bb.attacked_by[hostile][PieceKind::Pawn as usize].get(m.to) {
             score -= 350;
         }
 

@@ -197,19 +197,20 @@ const QUEEN: usize = PieceKind::Queen as usize;
 const KING: usize = PieceKind::King as usize;
 
 #[allow(clippy::cast_lossless, clippy::cast_possible_truncation)]
-pub(super) fn hce_evaluation(position: &Position, bb: &PositionBitboards) -> i32 {
+pub(super) fn hce_evaluation(position: &Position) -> i32 {
+    let bb = &position.bb;
     let early_game = game_evaluation(position, bb, false);
     let mut end_game = game_evaluation(position, bb, true) as f64;
     let phase = phase(bb);
-    end_game = end_game * scale_factor(position, bb, end_game) / 64.0;
+    end_game = end_game * scale_factor(position, end_game) / 64.0;
     let mut score = (early_game as f64 * phase + (end_game * (128.0 - phase))) / 128.0;
     score += TEMPO;
-    score = score * (50.0 - position.halftime as f64) / 50.0;
+    score = score * (50.0 - position.data.halftime as f64) / 50.0;
     score as i32
 }
 
 fn game_evaluation(position: &Position, bb: &PositionBitboards, end_game: bool) -> i32 {
-    let side = position.side_to_move;
+    let side = position.data.side_to_move;
 
     let mut score = 0;
     score += total_material(bb, side, end_game) - total_material(bb, !side, end_game);
@@ -234,22 +235,23 @@ fn phase(bb: &PositionBitboards) -> f64 {
     ((npm - END_GAME_LIMIT) * 128.0) / (EARLY_GAME_LIMIT - END_GAME_LIMIT)
 }
 
-fn scale_factor(position: &Position, bb: &PositionBitboards, end_game: f64) -> f64 {
-    let side = position.side_to_move;
+fn scale_factor(position: &Position, end_game: f64) -> f64 {
+    let side = position.data.side_to_move;
     if end_game > 0.0 {
-        scale_factor_for_side(side, position, bb)
+        scale_factor_for_side(side, position)
     } else {
-        scale_factor_for_side(!side, position, bb)
+        scale_factor_for_side(!side, position)
     }
 }
 
 #[allow(clippy::cast_precision_loss)]
-fn scale_factor_for_side(side: Side, position: &Position, bb: &PositionBitboards) -> f64 {
+fn scale_factor_for_side(side: Side, position: &Position) -> f64 {
     const EARLY_GAME_BISHOP_VALUE: i32 = EARLY_GAME_VALUES[BISHOP];
     const EARLY_GAME_ROOK_VALUE: i32 = EARLY_GAME_VALUES[ROOK];
 
     let friendly = side as usize;
     let hostile = !side as usize;
+    let bb = &position.bb;
 
     let f_queens = bb.pieces[friendly][QUEEN].pop_count();
     let f_bishops = bb.pieces[friendly][BISHOP].pop_count();
@@ -279,7 +281,7 @@ fn scale_factor_for_side(side: Side, position: &Position, bb: &PositionBitboards
             && f_npm == EARLY_GAME_BISHOP_VALUE
             && h_npm == EARLY_GAME_BISHOP_VALUE
         {
-            22.0 + 4.0 * candidate_passed(side, position, bb)
+            22.0 + 4.0 * candidate_passed(side, position)
         } else if are_opposite_bishops {
             22.0 + 3.0 * bb.sides[WHITE].pop_count() as f64
         } else {
@@ -365,16 +367,11 @@ const fn non_pawn_material(bb: &PositionBitboards, side: Side) -> i32 {
 
 fn total_psqt(position: &Position, side: Side, end_game: bool) -> i32 {
     position
-        .squares
-        .iter()
-        .enumerate()
-        .filter_map(|(square, content)| {
-            if let Some(piece) = content {
-                if piece.side == side {
-                    Some((Square::try_from(square).ok()?, piece.kind))
-                } else {
-                    None
-                }
+        .pieces()
+        .into_iter()
+        .filter_map(|(square, piece)| {
+            if piece.side == side {
+                Some((square, piece.kind))
             } else {
                 None
             }
@@ -386,16 +383,11 @@ fn total_psqt(position: &Position, side: Side, end_game: bool) -> i32 {
 
 fn total_mobility(position: &Position, bb: &PositionBitboards, side: Side, end_game: bool) -> i32 {
     position
-        .squares
-        .iter()
-        .enumerate()
-        .filter_map(|(square, content)| {
-            if let Some(piece) = content {
-                if piece.side == side {
-                    Some((Square::try_from(square).ok()?, piece.kind))
-                } else {
-                    None
-                }
+        .pieces()
+        .into_iter()
+        .filter_map(|(square, piece)| {
+            if piece.side == side {
+                Some((square, piece.kind))
             } else {
                 None
             }
@@ -774,23 +766,18 @@ fn king_pawn_distance(bb: &PositionBitboards, side: Side) -> i32 {
 }
 
 #[allow(clippy::cast_precision_loss)]
-fn candidate_passed(side: Side, position: &Position, bb: &PositionBitboards) -> f64 {
+fn candidate_passed(side: Side, position: &Position) -> f64 {
     position
-        .squares
-        .iter()
-        .enumerate()
-        .filter_map(|(square, content)| {
-            if let Some(piece) = content {
-                if piece.kind == PieceKind::Pawn && piece.side == side {
-                    Square::try_from(square).ok()
-                } else {
-                    None
-                }
+        .pieces()
+        .into_iter()
+        .filter_map(|(square, piece)| {
+            if piece.kind == PieceKind::Pawn && piece.side == side {
+                Some(square)
             } else {
                 None
             }
         })
-        .filter(|&square| is_candidate(side, square, bb))
+        .filter(|&square| is_candidate(side, square, &position.bb))
         .count() as f64
 }
 
@@ -977,63 +964,45 @@ mod tests {
     #[test]
     fn test_non_pawn_material() {
         let board = Chessboard::default();
-        assert_eq!(non_pawn_material(&board.bitboards, Side::White), 8302);
-        assert_eq!(non_pawn_material(&board.bitboards, Side::Black), 8302);
+        assert_eq!(non_pawn_material(&board.position.bb, Side::White), 8302);
+        assert_eq!(non_pawn_material(&board.position.bb, Side::Black), 8302);
 
         let board = Chessboard::from_fen("rnbqkbnr/pppppppp/8/8/8/8/8/RNBQKBNR w KQkq - 0 1")
             .expect("Valid fen");
-        assert_eq!(non_pawn_material(&board.bitboards, Side::White), 8302);
-        assert_eq!(non_pawn_material(&board.bitboards, Side::Black), 8302);
+        assert_eq!(non_pawn_material(&board.position.bb, Side::White), 8302);
+        assert_eq!(non_pawn_material(&board.position.bb, Side::Black), 8302);
 
         let board = Chessboard::from_fen("1n1qk1nr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQ - 0 1")
             .expect("Valid fen");
-        assert_eq!(non_pawn_material(&board.bitboards, Side::White), 8302);
-        assert_eq!(non_pawn_material(&board.bitboards, Side::Black), 5376);
+        assert_eq!(non_pawn_material(&board.position.bb, Side::White), 8302);
+        assert_eq!(non_pawn_material(&board.position.bb, Side::Black), 5376);
     }
 
     #[test]
     fn test_scale_factor() {
         let board = Chessboard::from_fen("3qkb2/2pp1ppp/8/8/8/8/PPP1PP2/3QKB2 w - - 0 1")
             .expect("Valid fen");
-        assert_eq!(
-            scale_factor_for_side(Side::White, &board.position, &board.bitboards),
-            46.0
-        );
+        assert_eq!(scale_factor_for_side(Side::White, &board.position), 46.0);
 
         let board =
             Chessboard::from_fen("4k3/2pP1ppp/3p4/8/8/8/PPP2P2/3QK3 b - - 0 1").expect("Valid fen");
-        assert_eq!(
-            scale_factor_for_side(Side::White, &board.position, &board.bitboards),
-            37.0
-        );
+        assert_eq!(scale_factor_for_side(Side::White, &board.position), 37.0);
 
         let board = Chessboard::from_fen("1nb1k3/2pP1ppp/3p4/8/8/8/PPP2P2/3QK3 b - - 0 1")
             .expect("Valid fen");
-        assert_eq!(
-            scale_factor_for_side(Side::White, &board.position, &board.bitboards),
-            43.0
-        );
+        assert_eq!(scale_factor_for_side(Side::White, &board.position), 43.0);
 
         let board = Chessboard::from_fen("2b1k3/1Pp1Pppp/3Pp3/3p4/8/8/PPP3PP/2B1K3 b - - 0 1")
             .expect("Valid fen");
-        assert_eq!(
-            scale_factor_for_side(Side::White, &board.position, &board.bitboards),
-            38.0
-        );
+        assert_eq!(scale_factor_for_side(Side::White, &board.position), 38.0);
     }
 
     #[test]
     fn test_candidate_passed() {
         let board = Chessboard::from_fen("2b1k3/1Pp1Pp2/3Pp3/3p4/8/8/PPP3PP/2B1K3 b - - 0 1")
             .expect("Valid fen");
-        assert_eq!(
-            candidate_passed(Side::White, &board.position, &board.bitboards),
-            5.0
-        );
-        assert_eq!(
-            candidate_passed(Side::Black, &board.position, &board.bitboards),
-            1.0
-        );
+        assert_eq!(candidate_passed(Side::White, &board.position), 5.0);
+        assert_eq!(candidate_passed(Side::Black, &board.position), 1.0);
     }
 
     #[test]

@@ -205,7 +205,7 @@ pub(crate) fn init_pseudo_attacks() -> PieceMoveBitboards {
             let dest_i = i as isize + offset;
             if let Ok(dest) = Square::try_from(dest_i) {
                 if from.distance(dest) <= 2.0 {
-                    moves[PieceKind::King as usize][i].on(dest);
+                    moves[PieceKind::King as usize][i].on(dest as usize);
                 }
             }
         }
@@ -215,7 +215,7 @@ pub(crate) fn init_pseudo_attacks() -> PieceMoveBitboards {
             let dest_i = i as isize + offset;
             if let Ok(dest) = Square::try_from(dest_i) {
                 if from.distance(dest) <= 3.0 {
-                    moves[PieceKind::Knight as usize][i].on(dest);
+                    moves[PieceKind::Knight as usize][i].on(dest as usize);
                 }
             }
         }
@@ -272,13 +272,13 @@ pub(crate) fn init_pawn_moves() -> PawnMoveBitboards {
 
             if let Ok(dest) = Square::try_from(white_dest_i) {
                 if white_from.distance(dest) <= 2.0 {
-                    moves[Side::White as usize][white_i].1.on(dest);
+                    moves[Side::White as usize][white_i].1.on(dest as usize);
                 }
             }
 
             if let Ok(dest) = Square::try_from(black_dest_i) {
                 if black_from.distance(dest) <= 2.0 {
-                    moves[Side::Black as usize][black_i].1.on(dest);
+                    moves[Side::Black as usize][black_i].1.on(dest as usize);
                 }
             }
         }
@@ -300,9 +300,9 @@ fn seek_sliding(directions: &[Direction], origin: Square, blockers: Bitboard) ->
     for &direction in directions {
         let mut current = origin;
         while let Some(next) = current.neighbour(direction) {
-            result.on(next);
+            result.on(next as usize);
 
-            if blockers.get(next) {
+            if blockers.get(next as usize) {
                 break;
             }
 
