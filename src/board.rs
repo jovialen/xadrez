@@ -174,7 +174,7 @@ impl Chessboard {
     /// ```
     /// # use xadrez::Chessboard;
     /// let board = Chessboard::new("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
-    /// assert_eq!(board.state(), GameState::Playing);
+    /// assert_eq!(board.game_state(), GameState::Playing);
     /// ```
     ///
     /// A draw can occur for different reasons, as represented by the
@@ -185,7 +185,7 @@ impl Chessboard {
     /// * `DrawReason::Rule50`: The game is drawn because 50 moves by each
     ///   player have been played without a pawn move or capture.
     #[must_use]
-    pub fn state(&self) -> GameState {
+    pub fn game_state(&self) -> GameState {
         if self.position.data.halftime >= 50 {
             GameState::Draw(DrawReason::Rule50)
         } else if self.moves.is_empty() {
@@ -225,7 +225,7 @@ impl Chessboard {
     /// early and midgame, but struggles more with the endgame.
     #[must_use]
     pub fn evaluate(&self) -> Score {
-        evaluation::evaluate_position(self.state(), &self.position)
+        evaluation::evaluate_position(self.game_state(), &self.position)
     }
 
     /// Sets the position on the chessboard to the one specified by the

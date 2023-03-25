@@ -113,8 +113,8 @@ fn play<'a, I: Iterator<Item = &'a str>>(board: &mut xadrez::board::Chessboard, 
         .unwrap_or(usize::MAX);
 
     for _ in 0..rounds {
-        if board.state() != GameState::Playing {
-            println!("{}", board.state());
+        if board.game_state() != GameState::Playing {
+            println!("{}", board.game_state());
             return;
         }
 
@@ -130,7 +130,7 @@ fn play<'a, I: Iterator<Item = &'a str>>(board: &mut xadrez::board::Chessboard, 
                 .make_move(best)
                 .expect("All found moves should be valid");
         } else {
-            println!("Can't make a move. {}", board.state());
+            println!("Can't make a move. {}", board.game_state());
             return;
         }
     }
@@ -161,7 +161,7 @@ fn main() {
             Some("perft") => perft(&mut chessboard, tokens),
             Some("undo") => chessboard.undo(),
             Some("evaluate") => println!("{}", chessboard.evaluate()),
-            Some("state") => println!("{}", chessboard.state()),
+            Some("state") => println!("{}", chessboard.game_state()),
             Some("search") => search(&chessboard, tokens),
             Some("play") => play(&mut chessboard, tokens),
             Some(cmd) => eprintln!("Error: Unknown command \"{}\"", cmd),
