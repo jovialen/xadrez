@@ -376,6 +376,14 @@ impl Default for Chessboard {
     }
 }
 
+impl std::ops::Index<Square> for Chessboard {
+    type Output = Option<Piece>;
+
+    fn index(&self, index: Square) -> &Self::Output {
+        &self.position[index]
+    }
+}
+
 impl std::fmt::Debug for Chessboard {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         write!(f, "{}", self)
