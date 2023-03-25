@@ -22,7 +22,7 @@
 //!
 //! ```
 //! [dependencies]
-//! xadrez = "0.1.0"
+//! xadrez = { git = "https://github.com/jovialen/xadrez" }
 //! ```
 //!
 //! Then, import the library in your code using:
