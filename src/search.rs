@@ -193,7 +193,7 @@ fn pv_search(
     moves.sort_by_key(|m| score_move(position, graph, *m));
 
     let extensions = extensions(position, &moves);
-    let reductions = reductions(position, graph, NodeType::Pv, &moves);
+    let reductions = reductions(position, graph, NodeType::Pv);
 
     graph.data.reductions += reductions;
     graph.data.extensions += extensions;
@@ -329,7 +329,7 @@ fn zw_search(
     moves.sort_by_key(|m| score_move(position, graph, *m));
 
     let extensions = extensions(position, &moves);
-    let mut reductions = reductions(position, graph, node_type, &moves);
+    let mut reductions = reductions(position, graph, node_type);
 
     // Null-move reduction
     if current_eval >= beta && !position.in_check() {
@@ -490,12 +490,7 @@ fn extensions(position: &Position, moves: &Vec<Move>) -> usize {
     extensions
 }
 
-fn reductions(
-    position: &Position,
-    graph: &SearchGraph,
-    node_type: NodeType,
-    moves: &Vec<Move>,
-) -> usize {
+fn reductions(position: &Position, graph: &SearchGraph, node_type: NodeType) -> usize {
     // No reductions when in check.
     if position.in_check() {
         return 0;
