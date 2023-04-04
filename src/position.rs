@@ -1,7 +1,7 @@
 use crate::bitboards::constants::BITBOARD_ALL;
 use crate::bitboards::Bitboard;
+use crate::board::{DrawReason, GameState};
 use crate::error::ParseFenError;
-
 use crate::fen::FenString;
 use crate::movegen;
 use crate::piece::{Piece, PieceKind, Side, PIECE_KIND_COUNT, SIDE_COUNT};
@@ -73,8 +73,22 @@ impl Position {
     }
 
     #[inline]
-    pub fn in_check(&self) -> bool {
-        self.bb.checkers != 0
+    pub const fn in_check(&self) -> bool {
+        self.bb.checkers.0 != 0
+    }
+
+    pub fn game_state(&self) -> GameState {
+        if self.data.halftime >= 50 {
+            GameState::Draw(DrawReason::Rule50)
+        } else if self.generate_moves().is_empty() {
+            if self.in_check() {
+                GameState::Checkmate
+            } else {
+                GameState::Draw(DrawReason::Stalemate)
+            }
+        } else {
+            GameState::Playing
+        }
     }
 
     #[inline]

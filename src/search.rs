@@ -1,10 +1,10 @@
 //! Move searching.
-//!
-//! This crate contains the implementation of the move search algorithm used to
-//! find the best possible move for a position.
 
-use crate::board::Chessboard;
-use crate::evaluation;
+#![allow(clippy::module_name_repetitions)]
+
+use crate::error::SearchError;
+use crate::evaluation::evaluate_position;
+use crate::evaluation::hce::piece_value;
 use crate::evaluation::score::Score;
 use crate::piece::PieceKind;
 use crate::position::Position;
@@ -13,288 +13,632 @@ use itertools::Itertools;
 use rustc_hash::FxHashMap;
 use std::time::{Duration, Instant};
 
-/// Configurable move searcher for a [`Chessboard`].
-pub struct MoveSearcher {
-    board: Chessboard,
-    depth: Option<usize>,
-    time: Option<Duration>,
-    debug: bool,
+/// Configures and limits the chess move search.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SearchLimits {
+    /// The maximum amout of time the search can last.
+    pub max_time: Option<Duration>,
+    /// The maximum search depth.
+    pub max_depth: Option<usize>,
 
-    razoring_depth: usize,
-    razoring_margin: i32,
+    /// How many moves to evaluate in a multi-cut pruning.
+    pub mc_moves: usize,
+    /// How many cutoffs must occur to prune a branch.
+    pub mc_limit: usize,
+    /// How much to reduce the search depth in a multi-cut search.
+    pub mc_reduction: usize,
 
-    mc_reduction: usize,
-    mc_moves: usize,
-    mc_limit: usize,
+    /// The depth after which razoring is enabled.
+    pub razoring_depth: usize,
+    /// The evaluation margin used for razoring cutoffs.
+    pub razoring_margin: i32,
+}
 
+/// Search data from a chess move search.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SearchData {
+    start_time: Instant,
+    /// How long the search lasted.
+    pub duration: Duration,
+    /// Deepest search depth reached during the search.
+    pub depth: usize,
+    /// The score of the best move found in the search.
+    pub score: Score,
+
+    /// How many regular nodes where evaluated in the search.
+    pub nodes: usize,
+    /// How many quiesce nodes where evaluated in the search.
+    pub qnodes: usize,
+    /// How many nodes where the transposition table was used instead of
+    /// re-searching the node.
+    pub transposition_hits: usize,
+    /// How many nodes where pruned.
+    pub prunes: usize,
+    /// Total amount of depth reduced.
+    pub reductions: usize,
+    /// Total amound of depth extended.
+    pub extensions: usize,
+}
+
+struct SearchGraph {
+    limits: SearchLimits,
     data: SearchData,
-    transposition: FxHashMap<Position, TranspositionEntry>,
+    ttable: TranspositionTable,
 }
 
-struct TranspositionEntry {
-    at_depth: usize,
-    score: Score,
-    node_type: NodeType,
-    best_move: Option<Move>,
-}
-
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum NodeType {
     Pv,
     Cut,
     All,
 }
 
-/// Output data from a move search with the [`MoveSearcher::search`].
-#[derive(Clone, Copy, PartialEq, Eq)]
-#[allow(clippy::module_name_repetitions)]
-pub struct SearchData {
-    /// The best move found in the search.
-    ///
-    /// Will be [`None`] if no move is found.
-    pub best_move: Option<Move>,
-    /// The score given to the best move.
-    ///
-    /// The score is the expected relative evaluation [`SearchData::depth`]
-    /// moves in the future.
-    pub score: Score,
-    /// How many moves into the future the search looked.
-    pub depth: usize,
-    /// When the search started.
-    pub start_time: Instant,
-    /// How long the search lasted.
-    pub duration: Duration,
+#[derive(Default)]
+struct TranspositionTable(FxHashMap<Position, TranspositionEntry>);
 
-    /// How many nodes where searched.
-    pub nodes: usize,
-    /// How many times the transposition table was used instead of evaluating
-    /// the branch.
-    pub transposition_hits: usize,
-    /// How many branches where pruned from the search.
-    pub prunes: usize,
-    /// How many times the search depth was reduced.
-    pub reductions: usize,
+struct TranspositionEntry {
+    score: Score,
+    depth: usize,
+    node_type: NodeType,
+    best_move: Option<Move>,
 }
 
-impl MoveSearcher {
-    /// Create a new move searcher for the current position.
-    #[must_use]
-    pub fn new(board: &Chessboard) -> Self {
-        Self {
-            board: board.clone(),
-            depth: None,
-            time: None,
-            debug: false,
+pub(crate) fn search(
+    position: &Position,
+    limits: SearchLimits,
+) -> Result<(Move, SearchData), SearchError> {
+    let side = position.data.side_to_move;
+    let mut graph = SearchGraph {
+        limits,
+        data: SearchData::default(),
+        ttable: TranspositionTable::default(),
+    };
 
-            razoring_depth: 3,
-            razoring_margin: 300,
+    let mut moves = position.generate_moves();
+
+    if moves.is_empty() {
+        return Err(SearchError::NoMoves);
+    }
+
+    if moves.len() == 1 {
+        // If there is only one possible move, no amount of searching is going
+        // to find a better one.
+        return Ok((moves[0], graph.data));
+    }
+
+    let mut best_move = moves[0];
+    'search: for depth in 0..graph.limits.max_depth.unwrap_or(usize::MAX) {
+        let max_depth = depth * 2;
+
+        moves.sort_by_key(|m| score_move(position, &graph, *m));
+
+        let mut best_iteration_move = moves[0];
+        let mut best_iteration_score = Score::min(side);
+        for m in moves.iter() {
+            let next_position = position.make_move(*m);
+
+            let score = if let Ok(score) = pv_search(
+                &next_position,
+                &mut graph,
+                Score::min(!side),
+                Score::max(!side),
+                depth,
+                max_depth,
+                1,
+            ) {
+                -score
+            } else {
+                break 'search;
+            };
+
+            if score > best_iteration_score {
+                best_iteration_score = score;
+                best_iteration_move = *m;
+            }
+        }
+
+        best_move = best_iteration_move;
+
+        graph.data.depth = depth;
+        graph.data.score = best_iteration_score;
+        graph.ttable.insert(
+            *position,
+            depth,
+            best_iteration_score,
+            NodeType::Pv,
+            Some(best_iteration_move),
+        );
+
+        if best_iteration_score.is_mate() {
+            break 'search;
+        }
+    }
+
+    graph.data.duration = graph.data.start_time.elapsed();
+    Ok((best_move, graph.data))
+}
+
+fn pv_search(
+    position: &Position,
+    graph: &mut SearchGraph,
+    mut alpha: Score,
+    mut beta: Score,
+    depth: usize,
+    max_depth: usize,
+    distance_from_root: usize,
+) -> Result<Score, SearchError> {
+    graph.data.nodes += 1;
+
+    if depth == 0 {
+        return quiesce_search(position, graph, alpha, beta, distance_from_root);
+    }
+
+    if is_out_of_time(graph) {
+        return Err(SearchError::OutOfTime);
+    }
+
+    let side = position.data.side_to_move;
+    let next_distance = distance_from_root + 1;
+    let next_max_depth = max_depth.saturating_sub(1);
+
+    // Mate distance pruning
+    alpha = alpha.max(Score::mated_in(side, distance_from_root));
+    beta = beta.min(Score::mate_in(side, distance_from_root + 1));
+    if alpha >= beta {
+        graph.data.prunes += 1;
+        return Ok(alpha);
+    }
+
+    let mut moves = position.generate_moves();
+    moves.sort_by_key(|m| score_move(position, graph, *m));
+
+    let extensions = extensions(position, &moves);
+    let reductions = reductions(position, graph, NodeType::Pv, &moves);
+
+    graph.data.reductions += reductions;
+    graph.data.extensions += extensions;
+
+    let next_depth = (depth + extensions)
+        .saturating_sub(reductions + 1)
+        .min(max_depth);
+
+    let mut best_move = None;
+    for m in moves {
+        let next_position = position.make_move(m);
+
+        let score = if best_move.is_none() {
+            // All left-most nodes are Pv nodes.
+            -pv_search(
+                &next_position,
+                graph,
+                -beta,
+                -alpha,
+                next_depth,
+                next_max_depth,
+                next_distance,
+            )?
+        } else {
+            // All sibling-nodes to Pv nodes are cut nodes.
+            let mut score = -zw_search(
+                &next_position,
+                graph,
+                NodeType::Cut,
+                -alpha,
+                next_depth,
+                next_max_depth,
+                next_distance,
+            )?;
+            if score > alpha && score < beta {
+                score = -pv_search(
+                    &next_position,
+                    graph,
+                    -beta,
+                    -alpha,
+                    next_depth,
+                    next_max_depth,
+                    next_distance,
+                )?;
+            }
+            score
+        };
+
+        if score >= beta {
+            // We're cutting the node, so save it as a cut node in the transposition table.
+            graph
+                .ttable
+                .insert(*position, depth, beta, NodeType::Cut, Some(m));
+
+            graph.data.prunes += 1;
+            return Ok(beta);
+        }
+
+        if score > alpha {
+            alpha = score;
+            best_move = Some(m);
+        }
+    }
+
+    // No cut occured, so this is a Pv node.
+    graph
+        .ttable
+        .insert(*position, depth, alpha, NodeType::Pv, best_move);
+    Ok(alpha)
+}
+
+fn zw_search(
+    position: &Position,
+    graph: &mut SearchGraph,
+    node_type: NodeType,
+    mut beta: Score,
+    depth: usize,
+    max_depth: usize,
+    distance_from_root: usize,
+) -> Result<Score, SearchError> {
+    graph.data.nodes += 1;
+
+    let side = position.data.side_to_move;
+    let mut alpha = beta - 1;
+
+    if let Some(score) = graph.ttable.get(position, alpha, beta, depth) {
+        graph.data.transposition_hits += 1;
+        return Ok(score);
+    }
+
+    if depth == 0 {
+        return quiesce_search(position, graph, alpha, beta, distance_from_root);
+    }
+
+    if is_out_of_time(graph) {
+        return Err(SearchError::OutOfTime);
+    }
+
+    // Mate distance pruning
+    alpha = alpha.max(Score::mated_in(side, distance_from_root));
+    beta = beta.min(Score::mate_in(side, distance_from_root + 1));
+    if alpha >= beta {
+        graph.data.prunes += 1;
+        return Ok(alpha);
+    }
+
+    let current_eval = evaluate(position, distance_from_root);
+
+    // Razoring
+    if depth <= graph.limits.razoring_depth
+        && current_eval + graph.limits.razoring_margin < beta
+        && !position.in_check()
+    {
+        let quiesce_eval = quiesce_search(position, graph, alpha, beta, distance_from_root)?;
+
+        if quiesce_eval < beta {
+            graph.data.prunes += 1;
+            return Ok(quiesce_eval);
+        }
+    }
+
+    // All children of cut nodes are all nodes, and vice-versa.
+    let next_node_type = match node_type {
+        NodeType::Cut => NodeType::All,
+        NodeType::All => NodeType::Cut,
+        NodeType::Pv => unreachable!("zw_search should only be used for cut and all nodes"),
+    };
+    let next_max_depth = max_depth.saturating_sub(1);
+    let next_distance = distance_from_root + 1;
+    let next_beta = -beta + 1;
+
+    let mut moves = position.generate_moves();
+    moves.sort_by_key(|m| score_move(position, graph, *m));
+
+    let extensions = extensions(position, &moves);
+    let mut reductions = reductions(position, graph, node_type, &moves);
+
+    // Null-move reduction
+    if current_eval >= beta && !position.in_check() {
+        let next_depth = depth.saturating_sub(3 + usize::from(depth > 6));
+
+        let next_position = position.make_null_move();
+        let null_eval = -zw_search(
+            &next_position,
+            graph,
+            next_node_type,
+            next_beta,
+            next_depth,
+            next_max_depth,
+            next_distance,
+        )?;
+
+        if null_eval >= beta && !null_eval.is_mate() {
+            reductions += 6;
+
+            if depth <= 6 {
+                graph.data.prunes += 1;
+                return Ok(current_eval);
+            }
+        }
+    }
+
+    // Multi-cut pruning.
+    if node_type == NodeType::Cut && moves.len() > graph.limits.mc_moves && !position.in_check() {
+        let next_depth = depth.saturating_sub(graph.limits.mc_reduction + 1);
+
+        let mut count = 0;
+        for m in moves.iter().take(graph.limits.mc_moves) {
+            let next_position = position.make_move(*m);
+            let score = -zw_search(
+                &next_position,
+                graph,
+                next_node_type,
+                next_beta,
+                next_depth,
+                next_max_depth,
+                next_distance,
+            )?;
+
+            if score >= beta {
+                count += 1;
+                if count >= graph.limits.mc_limit {
+                    graph.data.prunes += 1;
+                    return Ok(beta);
+                }
+            }
+        }
+    }
+
+    graph.data.reductions += reductions;
+    graph.data.extensions += extensions;
+
+    let next_depth = (depth + extensions)
+        .saturating_sub(reductions + 1)
+        .min(max_depth);
+
+    // Search children.
+    for m in moves {
+        let next_position = position.make_move(m);
+        let score = -zw_search(
+            &next_position,
+            graph,
+            next_node_type,
+            next_beta,
+            next_depth,
+            next_max_depth,
+            next_distance,
+        )?;
+
+        if score >= beta {
+            // We're cutting the node, so save it as a cut node in the transposition table.
+            graph
+                .ttable
+                .insert(*position, depth, beta, NodeType::Cut, Some(m));
+
+            graph.data.prunes += 1;
+            return Ok(beta);
+        }
+    }
+
+    // No cut occured, so save this as an all node.
+    graph
+        .ttable
+        .insert(*position, depth, beta, NodeType::All, None);
+    Ok(alpha)
+}
+
+fn quiesce_search(
+    position: &Position,
+    graph: &mut SearchGraph,
+    mut alpha: Score,
+    beta: Score,
+    distance_from_root: usize,
+) -> Result<Score, SearchError> {
+    graph.data.qnodes += 1;
+
+    let evaluation = evaluate(position, distance_from_root);
+    if evaluation >= beta {
+        graph.data.prunes += 1;
+        return Ok(beta);
+    }
+    alpha = alpha.max(evaluation);
+
+    if let Some(score) = graph.ttable.get(position, alpha, beta, 0) {
+        return Ok(score);
+    }
+
+    let moves: Vec<_> = position
+        .generate_moves()
+        .into_iter()
+        .filter(|m| matches!(m.kind, MoveKind::Capture | MoveKind::Promotion(_)))
+        .sorted_by_key(|m| score_move(position, graph, *m))
+        .collect();
+
+    if moves.is_empty() {
+        return Ok(evaluation);
+    }
+
+    for m in moves {
+        let next_position = position.make_move(m);
+        let score = -quiesce_search(&next_position, graph, -beta, -alpha, distance_from_root + 1)?;
+
+        if score >= beta {
+            graph.data.prunes += 1;
+            return Ok(beta);
+        }
+        alpha = alpha.max(score);
+    }
+
+    Ok(alpha)
+}
+
+fn is_out_of_time(graph: &SearchGraph) -> bool {
+    if let Some(max) = graph.limits.max_time {
+        return graph.data.start_time.elapsed() > max;
+    }
+
+    false
+}
+
+fn extensions(position: &Position, moves: &Vec<Move>) -> usize {
+    let mut extensions = 0;
+
+    // Check extension
+    if position.in_check() {
+        extensions += 1;
+    }
+
+    // One reply extension
+    if moves.len() == 1 {
+        extensions += 1;
+    }
+
+    extensions
+}
+
+fn reductions(
+    position: &Position,
+    graph: &SearchGraph,
+    node_type: NodeType,
+    moves: &Vec<Move>,
+) -> usize {
+    // No reductions when in check.
+    if position.in_check() {
+        return 0;
+    }
+
+    let mut reductions = 0;
+
+    // Reduce Pv nodes that aren't in the transposition table
+    if !graph.ttable.0.contains_key(position) && node_type as usize == NodeType::Pv as usize {
+        reductions += 3;
+    }
+
+    // Cut node reduction
+    if node_type as usize == NodeType::Cut as usize {
+        reductions += 2;
+    }
+
+    reductions
+}
+
+fn score_move(position: &Position, graph: &SearchGraph, m: Move) -> i32 {
+    let side = position.data.side_to_move;
+    let hostile = !side as usize;
+
+    let mut score = 0;
+
+    if position[m.to].is_some() {
+        score += 10 * exchange(position, m);
+    }
+
+    if let MoveKind::Promotion(to) = m.kind {
+        score += piece_value(to, false);
+    }
+
+    if position.bb.attacked_by[hostile][PieceKind::Pawn as usize].get(m.to) {
+        score -= 350;
+    }
+
+    if let Some(entry) = graph.ttable.0.get(position) {
+        if entry.best_move == Some(m) {
+            // Always search hashed moves first
+            score += 1_000_000;
+        }
+    }
+
+    -score
+}
+
+#[inline]
+fn exchange(position: &Position, m: Move) -> i32 {
+    let piece = position[m.from].unwrap();
+
+    if let Some(capture) = position[m.to] {
+        piece_value(capture.kind, false) - piece_value(piece.kind, false)
+    } else {
+        0
+    }
+}
+
+#[inline]
+fn evaluate(position: &Position, distance_from_root: usize) -> Score {
+    let static_evaluation = evaluate_position(position);
+    if static_evaluation.is_mate() {
+        Score::mated_in(static_evaluation.relative_to, distance_from_root)
+    } else {
+        static_evaluation
+    }
+}
+impl SearchLimits {
+    /// No search limits.
+    #[must_use]
+    pub fn none() -> Self {
+        Self::default()
+    }
+
+    /// Time-limited search.
+    ///
+    /// The generated [`SearchLimits`] will not have a depth constraint
+    ///
+    /// # Arguments
+    ///
+    /// * `max_time` - How long the search can last.
+    #[must_use]
+    pub fn from_duration(max_time: Duration) -> Self {
+        Self {
+            max_time: Some(max_time),
+            ..Default::default()
+        }
+    }
+
+    /// Depth-limited search.
+    ///
+    /// The generated [`SearchLimits`] will not have a time constraint
+    ///
+    /// # Arguments
+    ///
+    /// * `max_depth` - How deep the search can get.
+    #[must_use]
+    pub fn from_depth(max_depth: usize) -> Self {
+        Self {
+            max_depth: Some(max_depth),
+            ..Default::default()
+        }
+    }
+}
+
+impl Default for SearchLimits {
+    fn default() -> Self {
+        Self {
+            max_depth: None,
+            max_time: None,
 
             mc_reduction: 1,
             mc_moves: 6,
             mc_limit: 3,
 
-            data: SearchData::new(),
-            transposition: FxHashMap::default(),
+            razoring_depth: 3,
+            razoring_margin: 300,
         }
     }
+}
 
-    /// Set the max depth of the search.
-    ///
-    /// If no max depth is set, then the search will have no max depth at all.
-    ///
-    /// # Arguments
-    ///
-    /// * `depth` - Max depth to search to.
-    #[must_use]
-    pub fn max_depth(mut self, depth: usize) -> Self {
-        self.depth = Some(depth);
-        self
-    }
+impl Default for SearchData {
+    fn default() -> Self {
+        Self {
+            start_time: Instant::now(),
 
-    /// Set the max time the search can take.
-    ///
-    /// If no max time is set, then the search will not stop after any time.
-    ///
-    /// # Arguments
-    ///
-    /// * `time` - Max length of the search.
-    #[must_use]
-    pub fn max_time(mut self, time: Duration) -> Self {
-        self.time = Some(time);
-        self
-    }
-
-    /// If the search should print its progress to the console.
-    ///
-    /// Initially set to `false`.
-    ///
-    /// # Arguments
-    ///
-    /// * `debug` - Whether to enable debugging.
-    #[must_use]
-    pub fn debug(mut self, debug: bool) -> Self {
-        self.debug = debug;
-        self
-    }
-
-    /// Configure the razoring.
-    ///
-    /// Razoring works by checking if low-depth nodes are bad enough to consider
-    /// pruning, without being in check. If razoring is triggered, a quiesce
-    /// search will check if the position can be turned around.
-    ///
-    /// Initially the searcher will start checking for razoring at depth `3`
-    /// with a `300` centi-pawn margin.
-    ///
-    /// # Arguments
-    ///
-    /// * `depth` - At which depth razoring gets enabled. Set to `0` to disable.
-    /// * `margin` - How far below `beta` the current position has to be to
-    ///   trigger razoring in centi-pawns.
-    #[must_use]
-    pub fn razoring(mut self, depth: usize, margin: i32) -> Self {
-        self.razoring_depth = depth;
-        self.razoring_margin = margin;
-        self
-    }
-
-    /// Configure the multi-cut pruning.
-    ///
-    /// Prune some cut nodes by returning early by searching the first `moves`
-    /// children of the node to a reduced depth (`reduction`). If more than
-    /// `limit` children trigger a beta cutoff, prune the entire tree.
-    ///
-    /// Initially the searcher will search `6` nodes to a reduced depth of `1`,
-    /// and prune the tree if more than `3` children trigger a cutoff.
-    ///
-    /// # Arguments
-    ///
-    /// * `moves` - Number of moves to look at when checking for multi-cut
-    ///   prune. Set to `0` to disable multi-cutting.
-    /// * `limit` - Number of cutoffs to trigger a multi-cut prune.
-    /// * `reduction` - Depth reduction for search in multi-cut prune.
-    #[must_use]
-    pub fn multi_cut(mut self, moves: usize, limit: usize, reduction: usize) -> Self {
-        self.mc_moves = moves;
-        self.mc_limit = limit;
-        self.mc_reduction = reduction;
-        self
-    }
-
-    /// Search for the best possible move.
-    #[must_use]
-    pub fn search(mut self) -> SearchData {
-        let max_depth = self.depth.unwrap_or(usize::MAX).max(1);
-        let side = self.board.position.data.side_to_move;
-
-        let moves = self.board.moves().clone();
-        if moves.is_empty() {
-            return self.data;
-        }
-
-        'search: for depth in 0..max_depth {
-            let (mut best_iteration_move, mut best_iteration_score) = (None, Score::min(side));
-
-            for &m in &moves {
-                self.board.make_move(m).expect("All moves should be legal");
-                let score =
-                    -self.pv_search(Score::min(!side), Score::max(!side), depth, depth.pow(2), 1);
-                self.board.undo();
-
-                if score > best_iteration_score {
-                    best_iteration_score = score;
-                    best_iteration_move = Some(m);
-                }
-
-                if let Some(max_time) = self.time {
-                    if self.data.start_time.elapsed() > max_time {
-                        break 'search;
-                    }
-                }
-            }
-
-            if self.debug {
-                println!(
-                    "Search: Depth: {depth}, Move: {}, Score: {}",
-                    best_iteration_move.map_or(String::from("None"), |m| m.to_string()),
-                    best_iteration_score
-                );
-            }
-
-            if best_iteration_move.is_some() {
-                self.data.best_move = best_iteration_move;
-                self.data.score = best_iteration_score;
-
-                // If forced checkmate is found
-                if best_iteration_score.is_mate() {
-                    break 'search;
-                }
-            }
-
-            self.data.depth = depth;
-        }
-
-        self.data.duration = self.data.start_time.elapsed();
-
-        self.data
-    }
-
-    #[inline]
-    fn exchange(&self, m: Move) -> i32 {
-        let piece = self.board.position[m.from].unwrap();
-
-        if let Some(capture) = self.board.position[m.to] {
-            evaluation::hce::piece_value(capture.kind, false)
-                - evaluation::hce::piece_value(piece.kind, false)
-        } else {
-            0
+            score: Score::equal(),
+            duration: Duration::default(),
+            depth: 0,
+            nodes: 0,
+            qnodes: 0,
+            transposition_hits: 0,
+            prunes: 0,
+            reductions: 0,
+            extensions: 0,
         }
     }
+}
 
-    fn score_move(&self, m: Move) -> i32 {
-        let friendly = self.board.position.data.side_to_move as usize;
-        let hostile = 1 ^ friendly;
-
-        let mut score = 0;
-
-        if self.board.position[m.to].is_some() {
-            score += 10 * self.exchange(m);
-        }
-
-        if let MoveKind::Promotion(to) = m.kind {
-            score += evaluation::hce::piece_value(to, false);
-        }
-
-        if self.board.position.bb.attacked_by[hostile][PieceKind::Pawn as usize].get(m.to) {
-            score -= 350;
-        }
-
-        if let Some(entry) = self.transposition.get(&self.board.position) {
-            if entry.best_move == Some(m) && self.board.is_legal(m) {
-                // Always search hash moves first
-                score += 100_000;
-            }
-        }
-
-        -score
-    }
-
-    #[inline]
-    fn evaluate(&self, distance_from_root: usize) -> Score {
-        let evaluation = self.board.evaluate();
-        if evaluation.is_mate() {
-            Score::mated_in(evaluation.relative_to, distance_from_root)
-        } else {
-            evaluation
-        }
-    }
-
-    #[inline]
-    fn fetch_transposition(&self, alpha: Score, beta: Score, depth: usize) -> Option<Score> {
-        let entry = self
-            .transposition
-            .get(&self.board.position)
-            .filter(|e| e.at_depth >= depth)?;
+impl TranspositionTable {
+    fn get(&self, position: &Position, alpha: Score, beta: Score, depth: usize) -> Option<Score> {
+        let entry = self.0.get(&position).filter(|e| e.depth >= depth)?;
 
         match entry.node_type {
             NodeType::Pv => Some(entry.score),
@@ -304,332 +648,34 @@ impl MoveSearcher {
         }
     }
 
-    fn save_transposition(
+    fn insert(
         &mut self,
-        at_depth: usize,
+        position: Position,
+        depth: usize,
         score: Score,
         node_type: NodeType,
         best_move: Option<Move>,
     ) {
-        if let Some(entry) = self.transposition.get(&self.board.position) {
+        if let Some(entry) = self.0.get(&position) {
             // Prefer higher depth transpositions
-            if entry.at_depth > at_depth {
+            if entry.depth > depth {
                 return;
             }
 
             // Prefer entries with a best move
-            if entry.at_depth == at_depth && entry.best_move.is_some() && best_move.is_none() {
+            if entry.depth == depth && entry.best_move.is_some() && best_move.is_none() {
                 return;
             }
         }
 
-        self.transposition.insert(
-            self.board.position,
-            TranspositionEntry::new(at_depth, score, node_type, best_move),
+        self.0.insert(
+            position,
+            TranspositionEntry {
+                depth,
+                score,
+                node_type,
+                best_move,
+            },
         );
-    }
-
-    fn pv_search(
-        &mut self,
-        mut alpha: Score,
-        mut beta: Score,
-        depth: usize,
-        max_depth: usize,
-        distance_from_root: usize,
-    ) -> Score {
-        self.data.nodes += 1;
-
-        let side = self.board.side_to_move();
-        let tthit = self.transposition.contains_key(&self.board.position);
-
-        if depth == 0 || (depth <= 3 && !tthit) {
-            return self.quiesce(alpha, beta, distance_from_root);
-        }
-
-        // Mate distance pruning
-        alpha = alpha.max(Score::mated_in(side, distance_from_root));
-        beta = beta.min(Score::mate_in(side, distance_from_root + 1));
-        if alpha >= beta {
-            self.data.prunes += 1;
-            return alpha;
-        }
-
-        let next_distance = distance_from_root + 1;
-
-        let mut reductions = 0;
-        let mut extensions = 0;
-
-        // All pv nodes not in the transposition table are reduced.
-        if !tthit {
-            reductions += 3;
-        }
-
-        // Check extension
-        if self.board.in_check() {
-            extensions += 1;
-        }
-
-        let mut moves = self.board.moves().clone();
-        moves.sort_by_key(|m| self.score_move(*m));
-
-        self.data.reductions += reductions;
-        let next_depth = (depth + extensions)
-            .saturating_sub(reductions + 1)
-            .min(max_depth - distance_from_root);
-
-        let mut best_move = None;
-        for m in moves {
-            self.board.make_move(m).expect("Legal move");
-
-            let score = if best_move.is_none() {
-                // All left-most nodes are Pv nodes.
-                -self.pv_search(-beta, -alpha, next_depth, max_depth, next_distance)
-            } else {
-                // All sibling-nodes to Pv nodes are cut nodes.
-                let mut score =
-                    -self.zw_search(NodeType::Cut, -alpha, next_depth, max_depth, next_distance);
-                if score > alpha && score < beta {
-                    score = -self.pv_search(-beta, -alpha, next_depth, max_depth, next_distance);
-                }
-                score
-            };
-
-            self.board.undo();
-
-            if score >= beta {
-                // We're cutting the node, so save it as a cut node in the transposition table.
-                self.save_transposition(depth, beta, NodeType::Cut, Some(m));
-
-                self.data.prunes += 1;
-                return beta;
-            }
-
-            if score > alpha {
-                alpha = score;
-                best_move = Some(m);
-            }
-        }
-
-        // No cut occured, so this is a Pv node.
-        self.save_transposition(depth, alpha, NodeType::Pv, best_move);
-        alpha
-    }
-
-    #[allow(clippy::too_many_lines)]
-    fn zw_search(
-        &mut self,
-        node_type: NodeType,
-        mut beta: Score,
-        depth: usize,
-        max_depth: usize,
-        distance_from_root: usize,
-    ) -> Score {
-        self.data.nodes += 1;
-
-        let side = self.board.side_to_move();
-        let mut alpha = beta - 1;
-
-        if let Some(score) = self.fetch_transposition(alpha, beta, depth) {
-            self.data.transposition_hits += 1;
-            return score;
-        }
-
-        if depth == 0 {
-            return self.quiesce(alpha, beta, distance_from_root);
-        }
-
-        // Mate distance pruning
-        alpha = alpha.max(Score::mated_in(side, distance_from_root));
-        beta = beta.min(Score::mate_in(side, distance_from_root + 1));
-        if alpha >= beta {
-            self.data.prunes += 1;
-            return alpha;
-        }
-
-        let current_eval = self.board.evaluate();
-
-        // Razoring
-        if depth <= self.razoring_depth
-            && !self.board.in_check()
-            && current_eval + self.razoring_margin < beta
-        {
-            let quiesce_eval = self.quiesce(alpha, beta, distance_from_root);
-
-            if quiesce_eval < beta {
-                self.data.prunes += 1;
-                return quiesce_eval;
-            }
-        }
-
-        // All children of cut nodes are all nodes, and vice-versa.
-        #[allow(clippy::match_wildcard_for_single_variants)]
-        let next_node_type = match node_type {
-            NodeType::Cut => NodeType::All,
-            NodeType::All => NodeType::Cut,
-            _ => unreachable!("zw_search should only be used for cut and all nodes"),
-        };
-        let next_distance = distance_from_root + 1;
-        let next_beta = -beta + 1;
-
-        let mut extensions = 0;
-        let mut reductions = 0;
-
-        // Null-move reduction
-        if current_eval >= beta && !self.board.in_check() {
-            let next_depth = depth.saturating_sub(3 + usize::from(depth > 6));
-
-            self.board.make_null_move();
-            let null_eval = -self.zw_search(
-                next_node_type,
-                next_beta,
-                next_depth,
-                max_depth,
-                next_distance,
-            );
-            self.board.undo();
-
-            if null_eval >= beta && !null_eval.is_mate() {
-                reductions += 6;
-
-                if depth <= 6 {
-                    self.data.prunes += 1;
-                    return self.evaluate(distance_from_root);
-                }
-            }
-        }
-
-        // Cut node reduction
-        if node_type == NodeType::Cut {
-            reductions += 2;
-        }
-
-        let mut moves = self.board.moves().clone();
-        moves.sort_by_key(|m| self.score_move(*m));
-
-        // One reply extension
-        if moves.len() == 1 {
-            extensions += 1;
-        }
-
-        // Multi-cut pruning.
-        if node_type == NodeType::Cut && moves.len() > self.mc_moves && !self.board.in_check() {
-            let next_depth = depth.saturating_sub(self.mc_reduction + 1);
-
-            let mut count = 0;
-            for m in moves.iter().take(self.mc_moves) {
-                self.board.make_move(*m).expect("Legal move");
-                let score = -self.zw_search(
-                    next_node_type,
-                    next_beta,
-                    next_depth,
-                    max_depth,
-                    next_distance,
-                );
-                self.board.undo();
-
-                if score >= beta {
-                    count += 1;
-                    if count >= self.mc_limit {
-                        self.data.prunes += 1;
-                        return beta;
-                    }
-                }
-            }
-        }
-
-        self.data.reductions += reductions;
-        let next_depth = (depth + extensions)
-            .saturating_sub(reductions + 1)
-            .min(max_depth - distance_from_root);
-
-        // Search children.
-        for m in moves {
-            self.board.make_move(m).expect("Legal move");
-            let score = -self.zw_search(
-                next_node_type,
-                next_beta,
-                next_depth,
-                max_depth,
-                next_distance,
-            );
-            self.board.undo();
-
-            if score >= beta {
-                // We're cutting the node, so save it as a cut node in the transposition table.
-                self.save_transposition(depth, beta, NodeType::Cut, Some(m));
-
-                self.data.prunes += 1;
-                return beta;
-            }
-        }
-
-        // No cut occured, so save this as an all node.
-        self.save_transposition(depth, beta, NodeType::All, None);
-        alpha
-    }
-
-    fn quiesce(&mut self, mut alpha: Score, beta: Score, distance_from_root: usize) -> Score {
-        self.data.nodes += 1;
-
-        let evaluation = self.evaluate(distance_from_root);
-        if evaluation >= beta {
-            self.data.prunes += 1;
-            return beta;
-        }
-        alpha = alpha.max(evaluation);
-
-        let moves: Vec<_> = self
-            .board
-            .moves()
-            .clone()
-            .into_iter()
-            .filter(|m| matches!(m.kind, MoveKind::Capture | MoveKind::Promotion(_)))
-            .sorted_by_key(|m| -self.exchange(*m))
-            .collect();
-
-        if moves.is_empty() {
-            return evaluation;
-        }
-
-        for m in moves {
-            self.board.make_move(m).expect("Legal move");
-            let score = -self.quiesce(-beta, -alpha, distance_from_root + 1);
-            self.board.undo();
-
-            if score >= beta {
-                self.data.prunes += 1;
-                return beta;
-            }
-            alpha = alpha.max(score);
-        }
-
-        alpha
-    }
-}
-
-impl TranspositionEntry {
-    fn new(at_depth: usize, score: Score, node_type: NodeType, best_move: Option<Move>) -> Self {
-        Self {
-            at_depth,
-            score,
-            node_type,
-            best_move,
-        }
-    }
-}
-
-impl SearchData {
-    fn new() -> Self {
-        Self {
-            best_move: None,
-            score: Score::default(),
-            depth: 0,
-            start_time: Instant::now(),
-            duration: Duration::default(),
-            nodes: 0,
-            transposition_hits: 0,
-            prunes: 0,
-            reductions: 0,
-        }
     }
 }

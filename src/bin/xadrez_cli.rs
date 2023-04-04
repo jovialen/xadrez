@@ -8,7 +8,7 @@ use xadrez::board::{Chessboard, GameState};
 use xadrez::error::ParseFenError;
 use xadrez::fen::FEN_STARTING_POSITION;
 use xadrez::r#move::Move;
-use xadrez::search::MoveSearcher;
+use xadrez::search::SearchLimits;
 
 fn position<'a, I: Iterator<Item = &'a str>>(
     board: &mut Chessboard,
@@ -84,17 +84,19 @@ fn search<'a, I: Iterator<Item = &'a str>>(board: &Chessboard, mut args: I) {
         .and_then(|x| x.parse().ok())
         .unwrap_or(usize::MAX);
 
-    let search_data = MoveSearcher::new(board)
-        .max_time(Duration::from_millis(time_ms))
-        .max_depth(depth)
-        .debug(true)
-        .search();
+    let mut limits = SearchLimits::default();
+    limits.max_time = Some(Duration::from_millis(time_ms));
+    limits.max_depth = Some(depth);
 
-    if let Some(best) = search_data.best_move {
+    let search_result = board.search(limits);
+
+    if let Ok((best, search_data)) = search_result {
         println!(
-            "Best move: {best} (Score: {}, Nodes: {}, Transposition Hits: {}, Prunes: {}, Reductions: {})",
+            "Best move: {best} (Score: {}, Depth: {}, Nodes: {}, QNodes: {}, Transposition Hits: {}, Prunes: {}, Reductions: {})",
             search_data.score,
+            search_data.depth,
             search_data.nodes,
+            search_data.qnodes,
             search_data.transposition_hits,
             search_data.prunes,
             search_data.reductions,
@@ -112,18 +114,19 @@ fn play<'a, I: Iterator<Item = &'a str>>(board: &mut xadrez::board::Chessboard, 
         .and_then(|x| x.parse().ok())
         .unwrap_or(usize::MAX);
 
+    let mut limits = SearchLimits::default();
+    limits.max_time = Some(Duration::from_millis(time_ms));
+    limits.max_depth = Some(depth);
+
     for _ in 0..rounds {
         if board.game_state() != GameState::Playing {
             println!("{}", board.game_state());
             return;
         }
 
-        let search_data = MoveSearcher::new(board)
-            .max_time(Duration::from_millis(time_ms))
-            .max_depth(depth)
-            .search();
+        let search_result = board.search(limits);
 
-        if let Some(best) = search_data.best_move {
+        if let Ok((best, search_data)) = search_result {
             println!("{best} ({})", search_data.depth);
 
             board

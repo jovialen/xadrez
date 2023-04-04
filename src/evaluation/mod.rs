@@ -10,14 +10,14 @@ use crate::position::Position;
 use score::{PositionPrediction, Score};
 
 #[cfg_attr(feature = "nnue", allow(unused_variables))]
-pub(crate) fn evaluate_position(state: GameState, position: &Position) -> Score {
+pub(crate) fn evaluate_position(position: &Position) -> Score {
     #[cfg(feature = "nnue")]
-    let score = nnue::nnue_evaluation(position.data);
+    let score = nnue::nnue_evaluation(position);
 
     #[cfg(not(feature = "nnue"))]
     let score = hce::hce_evaluation(position);
 
-    let prediction = match state {
+    let prediction = match position.game_state() {
         GameState::Playing => None,
         GameState::Draw(_) => Some(PositionPrediction::Draw),
         GameState::Checkmate => Some(PositionPrediction::Checkmate),

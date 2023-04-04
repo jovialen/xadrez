@@ -35,7 +35,7 @@ pub enum ParseFenError {
 }
 
 /// An error which can be returned while parsing long algebraic notation.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum ParseLANError {
     /// Either the to or from square was invalid.
     InvalidSquare,
@@ -47,10 +47,19 @@ pub enum ParseLANError {
 
 /// An error which can be returned when attempting to make a move on a
 /// [`Chessboard`].
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum MoveError {
     /// The move was not legal.
     IllegalMove,
+}
+
+/// The possible errors that can occur during a search.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum SearchError {
+    /// The search was terminated due to running out of time.
+    OutOfTime,
+    /// There were no legal moves available to search.
+    NoMoves,
 }
 
 impl From<ParseIntError> for ParseFenError {
@@ -95,6 +104,17 @@ impl fmt::Display for MoveError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
             Self::IllegalMove => "move is not legal",
+        })
+    }
+}
+
+impl Error for SearchError {}
+
+impl fmt::Display for SearchError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::OutOfTime => "insufficient time to perform search",
+            Self::NoMoves => "no legal moves to search",
         })
     }
 }

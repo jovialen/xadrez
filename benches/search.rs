@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use criterion::{criterion_group, criterion_main, Criterion};
 use xadrez::board::Chessboard;
-use xadrez::search::MoveSearcher;
+use xadrez::search::SearchLimits;
 
 fn search_move_benchmark(c: &mut Criterion) {
     let board = Chessboard::default();
@@ -18,6 +18,7 @@ fn search_move_benchmark(c: &mut Criterion) {
     high_depth.sample_size(10);
     high_depth.bench_function("search depth 4", |b| b.iter(|| search_depth(&board, 4)));
     high_depth.bench_function("search depth 5", |b| b.iter(|| search_depth(&board, 5)));
+    high_depth.bench_function("search depth 6", |b| b.iter(|| search_depth(&board, 6)));
     high_depth.finish();
 
     let mut checkmate = c.benchmark_group("move-search-find-checkmate");
@@ -29,12 +30,12 @@ fn search_move_benchmark(c: &mut Criterion) {
 
 #[allow(unused_must_use)]
 fn search(board: &Chessboard) {
-    MoveSearcher::new(board).search();
+    board.search(SearchLimits::none());
 }
 
 #[allow(unused_must_use)]
 fn search_depth(board: &Chessboard, depth: usize) {
-    MoveSearcher::new(board).max_depth(depth).search();
+    board.search(SearchLimits::from_depth(depth));
 }
 
 criterion_group!(benches, search_move_benchmark);

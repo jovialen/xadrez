@@ -2,14 +2,15 @@
 //!
 //! Provides the structures relating to the chessboard as a whole.
 
-use crate::error::{MoveError, ParseFenError};
-use crate::evaluation;
+use crate::error::{MoveError, ParseFenError, SearchError};
 use crate::evaluation::score::Score;
 use crate::fen::FEN_STARTING_POSITION;
 use crate::piece::{Piece, Side};
 use crate::position::Position;
 use crate::r#move::Move;
+use crate::search::{SearchData, SearchLimits};
 use crate::square::Square;
+use crate::{evaluation, search};
 
 /// A game of Chess.
 #[derive(Clone, PartialEq, Eq)]
@@ -186,17 +187,7 @@ impl Chessboard {
     ///   player have been played without a pawn move or capture.
     #[must_use]
     pub fn game_state(&self) -> GameState {
-        if self.position.data.halftime >= 50 {
-            GameState::Draw(DrawReason::Rule50)
-        } else if self.moves.is_empty() {
-            if self.in_check() {
-                GameState::Checkmate
-            } else {
-                GameState::Draw(DrawReason::Stalemate)
-            }
-        } else {
-            GameState::Playing
-        }
+        self.position.game_state()
     }
 
     /// Returns true if the current side to move is in check, and false
@@ -225,7 +216,7 @@ impl Chessboard {
     /// early and midgame, but struggles more with the endgame.
     #[must_use]
     pub fn evaluate(&self) -> Score {
-        evaluation::evaluate_position(self.game_state(), &self.position)
+        evaluation::evaluate_position(&self.position)
     }
 
     /// Sets the position on the chessboard to the one specified by the
@@ -295,13 +286,6 @@ impl Chessboard {
         Ok(m)
     }
 
-    pub(crate) fn make_null_move(&mut self) {
-        self.history.push(self.position);
-
-        self.position = self.position.make_null_move();
-        self.moves = self.position.generate_moves();
-    }
-
     /// Undo the most recent move made on the board.
     ///
     /// If there is no move to undo, the function returns without modifying
@@ -314,6 +298,31 @@ impl Chessboard {
             self.position = last_position;
             self.moves = self.position.generate_moves();
         }
+    }
+
+    /// Searches for the best move in the current position within the specified search limits.
+    ///
+    /// # Arguments
+    ///
+    /// * `limits` - The search limits to be used during the search.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let board = Chessboard::default();
+    /// let limits = SearchLimits::from_duration(Duration::from_secs(10));
+    /// let result = board.search(limits);
+    /// match result {
+    ///     Ok((m, data)) => {
+    ///         println!("best move found: {} ({})", m, data.score);
+    ///     }
+    ///     Err(e) => {
+    ///         println!("search error: {}", e);
+    ///     }
+    /// }
+    /// ```
+    pub fn search(&self, limits: SearchLimits) -> Result<(Move, SearchData), SearchError> {
+        search::search(&self.position, limits)
     }
 
     /// Returns the number of leaf nodes in the game tree for the current

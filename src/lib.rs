@@ -120,5 +120,6 @@ pub mod prelude {
     pub use crate::builder::BoardBuilder;
     pub use crate::piece::{Piece, PieceKind, Side};
     pub use crate::r#move::Move;
+    pub use crate::search::{SearchData, SearchLimits};
     pub use crate::square::Square;
 }

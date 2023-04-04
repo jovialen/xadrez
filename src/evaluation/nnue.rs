@@ -13,7 +13,7 @@ lazy_static! {
 
 pub(super) fn nnue_evaluation(position: &Position) -> i32 {
     let mut state = create_state(position).expect("Cannot evaluate invalid position.");
-    let side_to_move = nnue_side(position.side_to_move);
+    let side_to_move = nnue_side(position.data.side_to_move);
     state.activate(side_to_move)[0] / 16
 }
 
@@ -21,7 +21,7 @@ fn create_state(position: &Position) -> Option<SfHalfKpState> {
     let mut white_king = None;
     let mut black_king = None;
 
-    for (square, content) in position.squares.iter().enumerate() {
+    for (square, content) in position.data.squares.iter().enumerate() {
         if let Some(piece) = content {
             match *piece {
                 WHITE_KING => white_king = nnue_square(square),
@@ -33,7 +33,7 @@ fn create_state(position: &Position) -> Option<SfHalfKpState> {
 
     let mut state = EVALUATOR.model.new_state(white_king?, black_king?);
 
-    for (square, content) in position.squares.iter().enumerate() {
+    for (square, content) in position.data.squares.iter().enumerate() {
         if let Some(piece) = content {
             if piece.kind == PieceKind::King {
                 continue;

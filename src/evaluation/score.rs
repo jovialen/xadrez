@@ -118,6 +118,14 @@ impl Score {
             prediction: Some(PositionPrediction::MatedIn(moves)),
         }
     }
+
+    pub(crate) const fn equal() -> Self {
+        Self {
+            relative_to: Side::White,
+            score: 0,
+            prediction: None,
+        }
+    }
 }
 
 impl Ord for Score {
