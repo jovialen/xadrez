@@ -321,6 +321,10 @@ impl Chessboard {
     ///     }
     /// }
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// Will return an [`SearchError`] if the search cannot be completed.
     pub fn search(&self, limits: SearchLimits) -> Result<(Move, SearchData), SearchError> {
         search::search(&self.position, limits)
     }
@@ -395,7 +399,7 @@ impl std::ops::Index<Square> for Chessboard {
 
 impl std::fmt::Debug for Chessboard {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        write!(f, "{}", self)
+        write!(f, "{self}")
     }
 }
 

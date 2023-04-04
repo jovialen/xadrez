@@ -114,7 +114,7 @@ pub(crate) fn search(
 
         let mut best_iteration_move = moves[0];
         let mut best_iteration_score = Score::min(side);
-        for m in moves.iter() {
+        for m in &moves {
             let next_position = position.make_move(*m);
 
             let score = if let Ok(score) = pv_search(
@@ -633,7 +633,7 @@ impl Default for SearchData {
 
 impl TranspositionTable {
     fn get(&self, position: &Position, alpha: Score, beta: Score, depth: usize) -> Option<Score> {
-        let entry = self.0.get(&position).filter(|e| e.depth >= depth)?;
+        let entry = self.0.get(position).filter(|e| e.depth >= depth)?;
 
         match entry.node_type {
             NodeType::Pv => Some(entry.score),
@@ -665,12 +665,7 @@ impl TranspositionTable {
 
         self.0.insert(
             position,
-            TranspositionEntry {
-                depth,
-                score,
-                node_type,
-                best_move,
-            },
+            TranspositionEntry { score, depth, node_type, best_move },
         );
     }
 }

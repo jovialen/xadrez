@@ -84,9 +84,11 @@ fn search<'a, I: Iterator<Item = &'a str>>(board: &Chessboard, mut args: I) {
         .and_then(|x| x.parse().ok())
         .unwrap_or(usize::MAX);
 
-    let mut limits = SearchLimits::default();
-    limits.max_time = Some(Duration::from_millis(time_ms));
-    limits.max_depth = Some(depth);
+    let limits = SearchLimits {
+        max_time: Some(Duration::from_millis(time_ms)),
+        max_depth: Some(depth),
+        ..Default::default()
+    };
 
     let search_result = board.search(limits);
 
@@ -114,9 +116,11 @@ fn play<'a, I: Iterator<Item = &'a str>>(board: &mut xadrez::board::Chessboard, 
         .and_then(|x| x.parse().ok())
         .unwrap_or(usize::MAX);
 
-    let mut limits = SearchLimits::default();
-    limits.max_time = Some(Duration::from_millis(time_ms));
-    limits.max_depth = Some(depth);
+    let limits = SearchLimits {
+        max_time: Some(Duration::from_millis(time_ms)),
+        max_depth: Some(depth),
+        ..Default::default()
+    };
 
     for _ in 0..rounds {
         if board.game_state() != GameState::Playing {

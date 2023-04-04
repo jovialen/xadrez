@@ -154,7 +154,7 @@ impl BoardBuilder {
     ///   specified side and direction.
     #[must_use]
     pub fn castling(mut self, side: Side, kingside: bool, allowed: bool) -> Self {
-        let i = if kingside { 0 } else { 1 };
+        let i = usize::from(!kingside);
         self.data.castling[side as usize][i] = allowed;
         self
     }
