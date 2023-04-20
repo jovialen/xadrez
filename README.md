@@ -1,5 +1,7 @@
 # Xadrez
 
+[![Rust](https://github.com/jovialen/xadrez/actions/workflows/rust.yml/badge.svg)](https://github.com/jovialen/xadrez/actions/workflows/rust.yml)
+
 A chess engine written in Rust.
 
 ## Usage
